@@ -5,6 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Terminal Echoes</title>
     <link rel="preload" as="image" href="https://wallpapers.com/images/hd/hacking-background-bryw246r4lx5pyue.jpg" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Theme Color -->
+    <meta name="theme-color" content="#111827">
+
+    <!-- Apple PWA specific tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TerminalEchoes">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <!-- Add more sizes for apple-touch-icon if needed, e.g.: -->
+    <!-- <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png"> -->
+    <!-- <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png"> -->
+    <!-- <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167x167.png"> -->
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body, html, #root {
@@ -62,5 +79,18 @@
   <body class="text-gray-100">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            })
+            .catch(error => {
+              console.log('ServiceWorker registration failed: ', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
