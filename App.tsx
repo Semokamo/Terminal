@@ -86,7 +86,7 @@ const App: React.FC = () => {
   const [lilyChatInitialized, setLilyChatInitialized] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [isLilyTrusting, setIsLilyTrusting] = useState<boolean>(false);
-  const lilyIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lilyIdleTimerRef = useRef<number | null>(null);
 
   const [isOverviewVisible, setIsOverviewVisible] = useState<boolean>(false);
   const [activeAppsInOverview, setActiveAppsInOverview] = useState<OverviewApp[]>([]);
@@ -113,7 +113,7 @@ const App: React.FC = () => {
 
   const [notificationQueue, setNotificationQueue] = useState<AppNotification[]>([]);
   const [currentNotification, setCurrentNotification] = useState<AppNotification | null>(null);
-  const notificationDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const notificationDismissTimerRef = useRef<number | null>(null);
 
 
   const MIN_TYPING_DELAY = 700;
@@ -135,9 +135,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentNotification) {
-      const timerId = setTimeout(() => {
+      const timerId = window.setTimeout(() => {
         setCurrentNotification(null);
-      }, 2000); 
+      }, 5000); // Notification display time
       notificationDismissTimerRef.current = timerId; 
       return () => clearTimeout(timerId); 
     } else if (notificationQueue.length > 0) {
@@ -498,8 +498,10 @@ const App: React.FC = () => {
     });
     setUnreadCounts(prevUnread => ({ ...prevUnread, [targetId]: 0 }));
     
-    const status = contact ? (contact.description || `Chat with ${targetId === 'lily' ? SUBJECT_34_PROFILE_NAME : contact.name}`) : 'No active chat';
+    const contactForStatus = CHAT_CONTACT_LIST.find(c => c.id === targetId);
+    const status = contactForStatus ? (targetId === 'lily' ? `Chat with ${SUBJECT_34_PROFILE_NAME}` : contactForStatus.name) : 'No active chat';
     updateActiveApps('chat', 'Messenger', status);
+
 
   }, [appStatus, aiInstance, lilyChatInitialized, initializeLilyChat, updateActiveApps]);
 
@@ -533,15 +535,11 @@ const App: React.FC = () => {
 
   const navigateToHome = useCallback(() => {
     if (isOverviewVisible) setIsOverviewVisible(false);
-    if (currentView === 'chat' && activeChatTargetId) {
-    }
     setCurrentView('home');
     setActiveChatTargetId(null); 
-  }, [isOverviewVisible, currentView, activeChatTargetId]);
+  }, [isOverviewVisible]);
 
   const navigateToFiles = useCallback(() => { 
-    if (currentView === 'chat' && activeChatTargetId) {
-    }
     if (filesUnlocked) {
         setCurrentView('files_unlocked');
         updateActiveApps('files_unlocked', 'Files', 'Contents Unlocked');
@@ -551,7 +549,7 @@ const App: React.FC = () => {
     }
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, updateActiveApps, filesUnlocked, currentView, activeChatTargetId]);
+  }, [isOverviewVisible, updateActiveApps, filesUnlocked]);
 
   const handleFilesUnlock = useCallback((pin: string): boolean => { 
     if (pin === GALLERY_PIN) { 
@@ -567,8 +565,6 @@ const App: React.FC = () => {
   }, [setActiveAppsInOverview]);
   
   const navigateToBrowser = useCallback(() => {
-    if (currentView === 'chat' && activeChatTargetId) {
-    }
     setCurrentView('browser');
     let statusText = 'Idle';
     if (browserCurrentUrl) {
@@ -581,7 +577,7 @@ const App: React.FC = () => {
     updateActiveApps('browser', 'Web Browser', statusText);
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked, currentView, activeChatTargetId]);
+  }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked]);
 
   const handleSkullsSystemUnlockAttempt = (password: string): boolean => {
     if (password === SKULLS_SYSTEM_PASSWORD) {
@@ -609,22 +605,30 @@ const App: React.FC = () => {
   };
 
   const navigateToCalculator = useCallback(() => {
-    if (currentView === 'chat' && activeChatTargetId) {
-    }
     setCurrentView('calculator');
     updateActiveApps('calculator', 'Calculator', calculatorDisplayValue);
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, calculatorDisplayValue, updateActiveApps, currentView, activeChatTargetId]);
+  }, [isOverviewVisible, calculatorDisplayValue, updateActiveApps]);
 
   const handleBackNavigation = () => {
     if (isOverviewVisible) {
       setIsOverviewVisible(false);
       return;
     }
-    if (currentView !== 'home') {
-        navigateToHome();
+
+    // Tailwind 'sm' breakpoint is 640px
+    const isMobileScreen = window.innerWidth < 640;
+
+    if (currentView === 'chat' && isMobileScreen && activeChatTargetId !== null) {
+      // On mobile chat view, if a chat is active, back goes to chat list
+      setActiveChatTargetId(null);
+      updateActiveApps('chat', 'Messenger', 'Select a conversation');
+    } else if (currentView !== 'home') {
+      // Default back behavior: go to home screen
+      navigateToHome();
     }
+    // If on home, back button effectively does nothing here (handled by device/browser typically)
   };
 
   const sendMessageChatLogic = async (userInput: string) => {
@@ -730,13 +734,15 @@ const App: React.FC = () => {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
       setMessengerFirstOpenedThisSession(false); 
+      if (currentView === 'chat') {
+        setActiveChatTargetId(null);
+      }
     } else if (viewId === 'files_unlocked' || viewId === 'files_locked') {
       setFilesUnlocked(false);
     }
 
     if (currentView === viewId) {
       setCurrentView('home');
-      setActiveChatTargetId(null); 
     }
   }, [currentView, lastOpenedChat]);
 
@@ -849,17 +855,17 @@ const App: React.FC = () => {
       const now = Date.now();
       let timeToWait;
 
-      if (lastInteractionTime === 0 && isLilyTrusting) { // She just became trusting, no prior messages in her chat
+      if (lastInteractionTime === 0 && isLilyTrusting) { 
         timeToWait = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
       } else if (lastInteractionTime > 0) {
         const idealNextCheckInTime = lastInteractionTime + (Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay);
         timeToWait = idealNextCheckInTime - now;
       } else {
-        timeToWait = -1; // Don't set timer if no interaction and not just became trusting
+        timeToWait = -1; 
       }
 
       if (timeToWait > 0) {
-        lilyIdleTimerRef.current = setTimeout(() => {
+        lilyIdleTimerRef.current = window.setTimeout(() => {
           if (isLilyTrusting && appStatus === 'api_ready' && !isLilyTyping) {
             sendLilyIdleCheckInMessage();
           }
