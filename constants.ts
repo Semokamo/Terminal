@@ -114,7 +114,7 @@ export const CHAT_CONTACT_LIST: ChatContact[] = [
   {
     id: 'subject33',
     name: SUBJECT_33_PERSONA_NAME, 
-    avatarInitial: 'L', 
+    avatarInitial: 'S', 
     isResponsive: false,
     description: 'Connection Terminated', 
   },
