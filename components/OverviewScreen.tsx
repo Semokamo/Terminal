@@ -41,30 +41,25 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
   const [currentY, setCurrentY] = useState(0);
   const dragThreshold = -80; 
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return; 
+  const startDrag = (clientY: number) => {
     setIsDragging(true);
-    setStartY(e.clientY);
-    setCurrentY(e.clientY);
+    setStartY(clientY);
+    setCurrentY(clientY);
     if (cardRef.current) {
       cardRef.current.style.transition = 'none'; 
     }
-    e.stopPropagation(); 
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const drag = (clientY: number) => {
     if (!isDragging) return;
-    setCurrentY(e.clientY);
+    setCurrentY(clientY);
     if (cardRef.current) {
-      const dy = e.clientY - startY;
-      // Apply transform for Y movement to the button itself
-      // The scale during drag will be handled by className on the inner div
+      const dy = clientY - startY;
       cardRef.current.style.transform = `translateY(${Math.min(0, dy / 1.5)}px)`;
     }
-    e.stopPropagation();
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+  const endDrag = () => {
     if (!isDragging) return;
     setIsDragging(false);
     const dy = currentY - startY;
@@ -75,7 +70,7 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
 
     if (dy < dragThreshold) {
       if (cardRef.current) {
-        cardRef.current.style.transform = 'translateY(-200%) scale(0.8)'; // Button scales on dismiss
+        cardRef.current.style.transform = 'translateY(-200%) scale(0.8)';
         cardRef.current.style.opacity = '0';
         setTimeout(() => {
           onCloseApp(app.id);
@@ -85,12 +80,46 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
       }
     } else {
       if (cardRef.current) {
-         cardRef.current.style.transform = 'translateY(0) scale(1)'; // Snap button back, ensure scale is reset if it was part of drag
+         cardRef.current.style.transform = 'translateY(0) scale(1)';
       }
-      if (Math.abs(dy) < 10) { 
+      if (Math.abs(dy) < 10) { // If it was more of a tap than a drag
          onSwitchApp(app.id);
       }
     }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return; 
+    startDrag(e.clientY);
+    e.stopPropagation(); 
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
+    drag(e.clientY);
+    e.stopPropagation();
+  };
+
+  const handleMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
+    endDrag();
+    e.stopPropagation();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
+    if (e.touches.length === 1) {
+      startDrag(e.touches[0].clientY);
+      e.stopPropagation();
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLButtonElement>) => {
+    if (e.touches.length === 1) {
+      drag(e.touches[0].clientY);
+      e.stopPropagation();
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLButtonElement>) => {
+    endDrag();
     e.stopPropagation();
   };
   
@@ -121,15 +150,15 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp} 
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onDragStart={handleDragStart} 
       className={`group bg-gray-700 rounded-lg shadow-xl w-64 h-80 text-white 
                   transition-all duration-150 transform 
                   focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-opacity-75 
                   cursor-grab active:cursor-grabbing 
                   ${isDragging ? 'shadow-2xl' : 'hover:shadow-2xl'}`}
-                  // Removed: p-4, flex, flex-col, items-center, justify-between, hover:scale-105
-                  // The 'scale-105' when isDragging is removed here; it will be on the inner div.
-                  // The button's own scale will be handled by direct style manipulation for dismiss.
       aria-label={`Application: ${app.title}. Click or drag up to close.`}
       style={{ touchAction: 'none' }} 
     >
