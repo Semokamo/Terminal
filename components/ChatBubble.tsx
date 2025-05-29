@@ -15,14 +15,19 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
   const isRelocationUnit = message.sender === Sender.RelocationUnit;
 
   const bubbleAlignment = isUser ? 'items-end' : 'items-start';
-  const bubbleColor = isUser
-    ? 'bg-slate-700 text-white'
-    : (isLily || isRelocationUnit) 
-    ? 'bg-teal-600 text-white'
-    : 'bg-gray-700 text-gray-300'; 
+  
+  let bubbleColor = '';
+  if (isUser) {
+    bubbleColor = 'bg-slate-700 text-white';
+  } else if (isLily || isRelocationUnit) {
+    // If message is not seen and not from user, use a brighter color
+    bubbleColor = !message.isSeen ? 'bg-teal-500 text-white' : 'bg-teal-600 text-white';
+  } else { // System messages
+    bubbleColor = 'bg-gray-700 text-gray-300';
+  }
   
   let senderName = USER_PERSONA_NAME;
-  if (isLily) senderName = LILY_CHAT_SPEAKER_NAME; // Display "Lily" for her messages
+  if (isLily) senderName = LILY_CHAT_SPEAKER_NAME; 
   else if (isSystem) senderName = KIDNAPPER_SYSTEM_PERSONA_NAME;
   else if (isRelocationUnit) senderName = RELOCATION_UNIT_PERSONA_NAME;
 
@@ -33,7 +38,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
           <div className="flex items-center mb-1">
             {!isUser && <span className="text-xs text-gray-400 mr-2 font-semibold">{senderName}</span>}
           </div>
-          <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-xl shadow ${bubbleColor}`}>
+          <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-xl shadow bg-teal-600 text-white`}> {/* Typing indicator always standard color */}
             <div className="flex items-center">
                 <LoadingSpinner size="w-4 h-4" />
                 <span className="ml-2 italic">{message.text}</span>

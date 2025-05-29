@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import AndroidHomeScreen from './components/AndroidHomeScreen';
@@ -45,6 +46,13 @@ const initialChatHistoriesState: Record<ChatTargetId, Message[]> = {
   subject33: [],
 };
 
+const initialUnreadCounts: Record<ChatTargetId, number> = {
+  lily: 0,
+  relocation: 0,
+  subject32: 0,
+  subject33: 0,
+};
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('game_start');
   const [appStatus, setAppStatus] = useState<AppStatus>('uninitialized');
@@ -53,6 +61,8 @@ const App: React.FC = () => {
 
   const [chatHistories, setChatHistories] = useState<Record<ChatTargetId, Message[]>>(initialChatHistoriesState);
   const [activeChatTargetId, setActiveChatTargetId] = useState<ChatTargetIdOrNull>(null);
+  const activeChatTargetIdRef = useRef<ChatTargetIdOrNull>(null); 
+
   const [isCurrentChatResponsive, setIsCurrentChatResponsive] = useState<boolean>(false);
   const [isLilyTyping, setIsLilyTyping] = useState<boolean>(false);
   const [lilyChatSession, setLilyChatSession] = useState<Chat | null>(null);
@@ -80,13 +90,17 @@ const App: React.FC = () => {
   });
 
   const [messengerFirstOpenedThisSession, setMessengerFirstOpenedThisSession] = useState<boolean>(false);
+  const [unreadCounts, setUnreadCounts] = useState<Record<ChatTargetId, number>>(initialUnreadCounts);
 
   const MIN_TYPING_DELAY = 700;
   const MAX_TYPING_DELAY = 4000;
   const TYPING_DELAY_PER_CHAR = 40;
 
   useEffect(() => {
-    // Disable right-click context menu
+    activeChatTargetIdRef.current = activeChatTargetId;
+  }, [activeChatTargetId]);
+
+  useEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault();
     };
@@ -165,7 +179,8 @@ const App: React.FC = () => {
     setRelocationEta(formattedNextHourTime); 
 
     let relocationLastTimestamp = 0;
-    const relocationHistoryWithTimestamps = RELOCATION_UNIT_CHAT_HISTORY.map(msg => {
+    let relocationUnreadCount = 0;
+    const relocationHistoryWithTimestampsAndSeen = RELOCATION_UNIT_CHAT_HISTORY.map(msg => {
       let updatedText = msg.text;
       if (updatedText?.includes('[DYNAMIC_NEXT_HOUR_TIME]')) {
         updatedText = updatedText.replace('[DYNAMIC_NEXT_HOUR_TIME]', formattedNextHourTime);
@@ -174,17 +189,22 @@ const App: React.FC = () => {
       if (timestampDate.getTime() > relocationLastTimestamp) {
           relocationLastTimestamp = timestampDate.getTime();
       }
-      return { ...msg, text: updatedText, timestamp: timestampDate }; 
+      const isSeen = activeChatTargetIdRef.current === 'relocation'; 
+      if (!isSeen && msg.sender !== Sender.User) {
+          relocationUnreadCount++;
+      }
+      return { ...msg, text: updatedText, timestamp: timestampDate, isSeen }; 
     });
 
     setChatHistories(prev => ({
       ...prev, 
-      relocation: relocationHistoryWithTimestamps,
+      relocation: relocationHistoryWithTimestampsAndSeen,
       subject32: [], 
       subject33: [], 
     }));
     
     setLastMessageTimestamps(prev => ({...prev, relocation: relocationLastTimestamp || Date.now()}));
+    setUnreadCounts(prev => ({ ...prev, relocation: relocationUnreadCount }));
 
   }, []);
 
@@ -197,14 +217,14 @@ const App: React.FC = () => {
   const parseGeminiResponse = useCallback((responseText: string): { segments: Array<{ type: 'text'; content: string } | { type: 'image_prompt'; content: string }> } => {
     const finalSegments: Array<{ type: 'text'; content: string } | { type: 'image_prompt'; content: string }> = [];
     const partBreakSegments = responseText.split('||PART_BREAK||');
-    const imagePromptRegex = /\[IMAGE_PROMPT:\s*(.*?)\]/s; // Non-global, dotall
+    const imagePromptRegex = /\[IMAGE_PROMPT:\s*(.*?)\]/s; 
 
     const addTextSegments = (text: string) => {
-        if (text.trim()) { // Process only if there's non-whitespace text
+        if (text.trim()) { 
             const lines = text.split('\n');
             for (const line of lines) {
                 const trimmedLine = line.trim();
-                if (trimmedLine) { // Add only non-empty trimmed lines
+                if (trimmedLine) { 
                     finalSegments.push({ type: 'text', content: trimmedLine });
                 }
             }
@@ -213,33 +233,28 @@ const App: React.FC = () => {
 
     for (const part of partBreakSegments) {
         const trimmedPart = part.trim();
-        if (!trimmedPart) continue; // Skip if the whole part (after trim) is empty
+        if (!trimmedPart) continue; 
 
         const imageMatch = trimmedPart.match(imagePromptRegex);
 
         if (imageMatch && imageMatch[1]) {
-            // Text before the image prompt
             const textBefore = trimmedPart.substring(0, imageMatch.index);
             addTextSegments(textBefore);
-
-            // The image prompt itself
             finalSegments.push({ type: 'image_prompt', content: imageMatch[1].trim() });
-
-            // Text after the image prompt
             const textAfter = trimmedPart.substring(imageMatch.index + imageMatch[0].length);
             addTextSegments(textAfter);
         } else {
-            // No image prompt in this part, treat the whole part as text
             addTextSegments(trimmedPart);
         }
     }
-
     return { segments: finalSegments };
   }, []);
 
   const processAndDisplayLilyResponse = useCallback(async (responseText: string, initialCall: boolean = false) => {
     const { segments } = parseGeminiResponse(responseText);
     let typingMessageId = `lily-typing-${Date.now()}`;
+    const currentActiveChat = activeChatTargetIdRef.current; 
+    const messageIsSeen = currentActiveChat === 'lily';
 
     const addTypingIndicator = () => {
       typingMessageId = `lily-typing-${Date.now()}`;
@@ -251,6 +266,7 @@ const App: React.FC = () => {
           text: LILY_TYPING_MESSAGE,
           isLoading: true,
           timestamp: new Date(),
+          isSeen: true, 
         }]
       }));
       setIsLilyTyping(true);
@@ -265,7 +281,7 @@ const App: React.FC = () => {
     for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
         if (segment.type === 'text') {
-            if(segment.content.trim()){ // This check might be redundant due to parseGeminiResponse now trimming
+            if(segment.content.trim()){
                 addTypingIndicator();
                 await new Promise(resolve => setTimeout(resolve, calculateTypingDelay(segment.content.length)));
                 removeTypingIndicator();
@@ -275,6 +291,7 @@ const App: React.FC = () => {
                     sender: Sender.Lily,
                     text: segment.content,
                     timestamp: new Date(),
+                    isSeen: messageIsSeen,
                 };
                 setChatHistories(prev => {
                     const updatedLilyHistory = [...prev.lily, newLilyMessage];
@@ -284,32 +301,40 @@ const App: React.FC = () => {
                     }
                     return {...prev, lily: updatedLilyHistory};
                 });
+                if (!messageIsSeen) {
+                  setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+                }
                 setLastMessageTimestamps(prev => ({ ...prev, lily: newLilyMessage.timestamp.getTime() }));
             }
         } else if (segment.type === 'image_prompt') {
             if (!aiInstance) {
-                 setChatHistories(prev => ({...prev, lily: [...prev.lily, { id: `lily-img-error-no-ai-${Date.now()}`, sender: Sender.Lily, text: IMAGE_GENERATION_ERROR_MESSAGE, isLoading: false, isError: true, timestamp: new Date() }]}));
+                 const errorMsg: Message = { id: `lily-img-error-no-ai-${Date.now()}`, sender: Sender.Lily, text: IMAGE_GENERATION_ERROR_MESSAGE, isLoading: false, isError: true, timestamp: new Date(), isSeen: messageIsSeen };
+                 setChatHistories(prev => ({...prev, lily: [...prev.lily, errorMsg]}));
+                 if (!messageIsSeen) setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
                  continue;
             }
             const imageMessageId = `img-${Date.now()}-${i}`;
             const imageTimestamp = new Date();
-            setChatHistories(prev => ({...prev, lily: [...prev.lily, {
+            const initialImageMessage: Message = {
                 id: imageMessageId,
                 sender: Sender.Lily,
                 isLoading: true,
                 timestamp: imageTimestamp,
-            }]}));
+                isSeen: messageIsSeen,
+            };
+            setChatHistories(prev => ({...prev, lily: [...prev.lily, initialImageMessage]}));
+            if (!messageIsSeen) {
+                setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+            }
+
             if (!initialCall) updateActiveApps('chat', 'Messenger', `${LILY_CHAT_SPEAKER_NAME} is sending an image...`);
             try {
-                // For dynamic image generation:
-                // const imageResponse = await aiInstance.models.generateImages({ model: 'imagen-3.0-generate-002', prompt: segment.content });
-                // const imageUrl = `data:image/png;base64,${imageResponse.generatedImages[0].image.imageBytes}`;
-                const imageUrl = "https://via.placeholder.com/300x200.png?text=Dynamic+Image+Placeholder"; // Placeholder for now
+                const imageUrl = "https://via.placeholder.com/300x200.png?text=Dynamic+Image+Placeholder"; 
                 setChatHistories(prev => {
                     const updatedHistory = prev.lily.map(msg =>
                         msg.id === imageMessageId ? { ...msg, imageUrl, isLoading: false } : msg
                     );
-                    if (!initialCall && i === segments.length - 1) { // If it's the last segment
+                    if (!initialCall && i === segments.length - 1) { 
                         const lilyTextMessagesCount = updatedHistory.filter(m => m.sender === Sender.Lily && m.text && !m.isLoading).length;
                         const lilyImageMessagesCount = updatedHistory.filter(m => m.sender === Sender.Lily && m.imageUrl).length;
                         updateActiveApps('chat', 'Messenger', `${lilyTextMessagesCount} messages, ${lilyImageMessagesCount} image(s)`);
@@ -321,7 +346,7 @@ const App: React.FC = () => {
             } catch (imgError) {
                 console.error("Image generation error (dynamic):", imgError);
                  setChatHistories(prev => ({...prev, lily: prev.lily.map(msg =>
-                    msg.id === imageMessageId ? { id: `lily-img-error-${Date.now()}`, sender: Sender.Lily, text: IMAGE_GENERATION_ERROR_MESSAGE, isLoading: false, isError: true, timestamp: new Date() } : msg
+                    msg.id === imageMessageId ? { ...msg, id: `lily-img-error-${Date.now()}`, text: IMAGE_GENERATION_ERROR_MESSAGE, isLoading: false, isError: true, timestamp: new Date() } : msg 
                 )}));
             }
         }
@@ -330,13 +355,17 @@ const App: React.FC = () => {
         }
     }
     setIsLilyTyping(false); 
-  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay]);
+  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay]); 
 
   const initializeLilyChat = useCallback(async () => {
     if (!aiInstance || lilyChatInitialized) {
       if (!aiInstance) {
         setChatError("AI Service not initialized.");
-        setChatHistories(prev => ({...prev, lily: [{ id: 'ai-init-error', sender: Sender.System, text: "Error: AI Service not initialized.", timestamp: new Date(), isError: true }]}));
+        const currentActiveChat = activeChatTargetIdRef.current;
+        const errorMsgIsSeen = currentActiveChat === 'lily';
+        const errorMsg: Message = { id: 'ai-init-error', sender: Sender.System, text: "Error: AI Service not initialized.", timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
+        setChatHistories(prev => ({...prev, lily: [errorMsg]}));
+        if (!errorMsgIsSeen) setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
       }
       return;
     }
@@ -355,7 +384,11 @@ const App: React.FC = () => {
       console.error("Error initializing Lily chat session:", error);
       const errorText = `Error starting ${LILY_CHAT_SPEAKER_NAME} session: ${error instanceof Error ? error.message : String(error)}`;
       setChatError(errorText);
-      setChatHistories(prev => ({...prev, lily: [...prev.lily, { id: `init-error-${Date.now()}`, sender: Sender.System, text: errorText, timestamp: new Date(), isError: true }]}));
+      const currentActiveChat = activeChatTargetIdRef.current;
+      const errorMsgIsSeen = currentActiveChat === 'lily';
+      const errorMsg: Message = { id: `init-error-${Date.now()}`, sender: Sender.System, text: errorText, timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
+      setChatHistories(prev => ({...prev, lily: [...prev.lily, errorMsg]}));
+      if(!errorMsgIsSeen) setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
       setLilyChatInitialized(false);
       updateActiveApps('chat', 'Messenger', 'Error starting chat');
     }
@@ -369,6 +402,18 @@ const App: React.FC = () => {
     if (targetId === 'lily' && appStatus === 'api_ready' && !lilyChatInitialized && aiInstance) {
       await initializeLilyChat();
     }
+    
+    setChatHistories(prevHistories => {
+      const currentChatMessages = prevHistories[targetId];
+      if (!currentChatMessages) return prevHistories;
+
+      const updatedMessages = currentChatMessages.map(msg =>
+        msg.sender !== Sender.User && !msg.isSeen ? { ...msg, isSeen: true } : msg
+      );
+      return { ...prevHistories, [targetId]: updatedMessages };
+    });
+    setUnreadCounts(prevUnread => ({ ...prevUnread, [targetId]: 0 }));
+    
     const status = contact ? (contact.description || `Chat with ${targetId === 'lily' ? LILY_CHAT_SPEAKER_NAME : contact.name}`) : 'No active chat';
     updateActiveApps('chat', 'Messenger', status);
 
@@ -377,6 +422,7 @@ const App: React.FC = () => {
   const navigateToChat = useCallback((targetId?: ChatTargetId) => {
     if (appStatus !== 'api_ready') {
       setCurrentView('home');
+      setActiveChatTargetId(null); // Ensure active chat is null if API not ready
       return;
     }
 
@@ -388,10 +434,10 @@ const App: React.FC = () => {
       updateActiveApps('chat', 'Messenger', 'Select a conversation');
     } else {
       setCurrentView('chat');
-      const effectiveTargetId = targetId || activeChatTargetId || 'lily'; // Default to current or Lily if just opening
-      if (effectiveTargetId) { // Ensure it's not null from activeChatTargetId
+      const effectiveTargetId = targetId || activeChatTargetId || 'lily'; 
+      if (effectiveTargetId) { 
          handleSwitchChatTarget(effectiveTargetId);
-      } else { // Should not happen if messengerFirstOpenedThisSession is true, but as a fallback
+      } else { 
          handleSwitchChatTarget('lily');
       }
     }
@@ -409,6 +455,7 @@ const App: React.FC = () => {
   const navigateToHome = useCallback(() => {
     if (isOverviewVisible) setIsOverviewVisible(false);
     setCurrentView('home');
+    setActiveChatTargetId(null); 
   }, [isOverviewVisible]);
 
   const navigateToFiles = useCallback(() => { 
@@ -419,6 +466,7 @@ const App: React.FC = () => {
         setCurrentView('files_locked');
         updateActiveApps('files_locked', 'Files', 'PIN Required');
     }
+    setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
   }, [isOverviewVisible, updateActiveApps, filesUnlocked]);
 
@@ -446,6 +494,7 @@ const App: React.FC = () => {
         }
     }
     updateActiveApps('browser', 'Web Browser', statusText);
+    setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
   }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked]);
 
@@ -477,6 +526,7 @@ const App: React.FC = () => {
   const navigateToCalculator = useCallback(() => {
     setCurrentView('calculator');
     updateActiveApps('calculator', 'Calculator', calculatorDisplayValue);
+    setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
   }, [isOverviewVisible, calculatorDisplayValue, updateActiveApps]);
 
@@ -485,8 +535,10 @@ const App: React.FC = () => {
       setIsOverviewVisible(false);
       return;
     }
-    if (currentView === 'chat' || currentView === 'files_locked' || currentView === 'files_unlocked' || currentView === 'browser' || currentView === 'calculator') {
-      navigateToHome();
+    // For any app view, back navigates to home and clears active chat.
+    // If already on home, it does nothing (or could show sign out, but current Mac bar handles that).
+    if (currentView !== 'home') {
+        navigateToHome();
     }
   };
 
@@ -502,6 +554,7 @@ const App: React.FC = () => {
       sender: Sender.User, 
       text: userInput,
       timestamp: new Date(),
+      isSeen: true, 
     };
 
     setChatHistories(prev => ({
@@ -535,9 +588,14 @@ const App: React.FC = () => {
           }
           
           setChatError(feedbackMessage);
-          setChatHistories(prev => ({...prev, lily: [...prev.lily, {
-            id: `error-invalid-response-${Date.now()}`, sender: Sender.System, text: feedbackMessage, timestamp: new Date(), isError: true,
-          }]}));
+          const currentActiveChat = activeChatTargetIdRef.current;
+          const errorSysMsg: Message = {
+            id: `error-invalid-response-${Date.now()}`, sender: Sender.System, text: feedbackMessage, timestamp: new Date(), isError: true, isSeen: currentActiveChat === 'lily'
+          };
+          setChatHistories(prev => ({...prev, lily: [...prev.lily, errorSysMsg]}));
+           if (currentActiveChat !== 'lily') {
+            setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+          }
           updateActiveApps('chat', 'Messenger', 'Error in chat response');
           setIsLilyTyping(false);
         }
@@ -548,9 +606,14 @@ const App: React.FC = () => {
         
         const errorText = `${LILY_CHAT_SPEAKER_NAME} seems to be having trouble responding. (Error: ${error instanceof Error ? error.message : String(error)})`;
         setChatError(errorText);
-        setChatHistories(prev => ({...prev, lily: [...prev.lily, {
-          id: `error-api-call-${Date.now()}`, sender: Sender.System, text: errorText, timestamp: new Date(), isError: true,
-        }]}));
+        const currentActiveChat = activeChatTargetIdRef.current;
+        const errorApiMsg: Message = {
+          id: `error-api-call-${Date.now()}`, sender: Sender.System, text: errorText, timestamp: new Date(), isError: true, isSeen: currentActiveChat === 'lily'
+        };
+        setChatHistories(prev => ({...prev, lily: [...prev.lily, errorApiMsg]}));
+        if (currentActiveChat !== 'lily') {
+            setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+        }
         updateActiveApps('chat', 'Messenger', 'Error in chat');
       }
     } else {
@@ -563,7 +626,7 @@ const App: React.FC = () => {
   const toggleOverview = () => setIsOverviewVisible(prev => !prev);
 
   const switchToAppFromOverview = (view: AppView) => {
-    if (view === 'chat') navigateToChat(activeChatTargetId || undefined);  // Pass undefined if null
+    if (view === 'chat') navigateToChat(activeChatTargetId || undefined);  
     else if (view === 'files_locked' || view === 'files_unlocked') navigateToFiles(); 
     else if (view === 'browser') navigateToBrowser();
     else if (view === 'calculator') navigateToCalculator();
@@ -573,7 +636,6 @@ const App: React.FC = () => {
   const handleCloseAppFromOverview = useCallback((viewId: AppView) => {
     setActiveAppsInOverview(prevApps => prevApps.filter(app => app.id !== viewId));
 
-    // Reset state for the closed app
     if (viewId === 'browser') {
       setBrowserCurrentUrl('');
       setSkullsSystemUnlocked(false);
@@ -587,13 +649,14 @@ const App: React.FC = () => {
       setFilesUnlocked(false);
     }
 
-    // If the closed app was the current view, navigate to home
+    // If the closed app was the current view, navigate home and ensure activeChatTargetId is null.
     if (currentView === viewId) {
-      navigateToHome();
+      setCurrentView('home');
+      setActiveChatTargetId(null); 
     }
   }, [
     currentView, 
-    navigateToHome, 
+    // navigateToHome, // Not directly calling navigateToHome to avoid its own setActiveChatTargetId(null) call if already handled
     setBrowserCurrentUrl, 
     setSkullsSystemUnlocked, 
     setCalculatorDisplayValue, 
@@ -623,6 +686,7 @@ const App: React.FC = () => {
     setSkullsSystemUnlocked(false);
     setRelocationEta("Calculating..."); 
     setLastMessageTimestamps({ lily: 0, relocation: 0, subject32: 0, subject33: 0 });
+    setUnreadCounts(initialUnreadCounts);
   }, []);
 
   const requestSignOut = () => {
@@ -675,6 +739,7 @@ const App: React.FC = () => {
                   onSwitchChatTarget={handleSwitchChatTarget}
                   isCurrentChatResponsive={isCurrentChatResponsive}
                   lastMessageTimestamps={lastMessageTimestamps} 
+                  unreadCounts={unreadCounts}
                 />;
       case 'files_locked': return <FilesPinScreen onBack={navigateToHome} onPinSuccess={handleFilesUnlock} />; 
       case 'files_unlocked': return <FilesScreen />;
@@ -730,7 +795,7 @@ const App: React.FC = () => {
               onRequestSignOut={requestSignOut}
             />
           )}
-          <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-7' : ''}`}> 
+          <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-8' : ''}`}> 
             {showApiKeyBanner && <ApiKeyBanner />}
             <main className="flex-grow overflow-hidden relative">
               {renderContent()}

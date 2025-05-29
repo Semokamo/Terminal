@@ -16,6 +16,7 @@ export interface Message {
   timestamp: Date;
   isLoading?: boolean; 
   isError?: boolean; 
+  isSeen?: boolean; // Added to track if the message has been seen by the user
 }
 
 export type ChatTargetId = 'lily' | 'relocation' | 'subject32' | 'subject33';

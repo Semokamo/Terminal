@@ -46,7 +46,7 @@ const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut })
 
   return (
     <div 
-      className="fixed top-0 left-0 right-0 h-7 bg-gray-800/90 text-gray-200 flex items-center justify-between px-3 text-xs shadow-sm backdrop-blur-sm z-30 select-none"
+      className="fixed top-0 left-0 right-0 h-8 bg-gray-800/90 text-gray-200 flex items-center justify-between px-3 text-sm shadow-sm backdrop-blur-sm z-30 select-none"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
       <div className="flex items-center space-x-4">
@@ -56,7 +56,7 @@ const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut })
         <div className="relative" ref={sessionMenuRef}>
           <button 
             onClick={toggleSessionMenu} 
-            className="hover:bg-gray-700 px-2 py-0.5 rounded"
+            className="hover:bg-gray-700 px-2 py-1 rounded"
             aria-haspopup="true"
             aria-expanded={isSessionMenuOpen}
           >

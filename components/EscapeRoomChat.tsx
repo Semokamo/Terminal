@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useMemo } from 'react';
 import { Message, ChatTargetId, ChatContact, Sender, ChatTargetIdOrNull } from '../types';
 import { NO_CHAT_SELECTED_DISPLAY_NAME } from '../constants';
@@ -13,10 +14,11 @@ interface EscapeRoomChatProps {
   onSendMessage: (userInput: string) => Promise<void>;
   isApiKeyAvailable: boolean; 
   chatContacts: ChatContact[];
-  activeChatTargetId: ChatTargetIdOrNull; // Updated type
+  activeChatTargetId: ChatTargetIdOrNull; 
   onSwitchChatTarget: (targetId: ChatTargetId) => void;
   isCurrentChatResponsive: boolean;
   lastMessageTimestamps: Record<ChatTargetId, number>; 
+  unreadCounts: Record<ChatTargetId, number>; 
 }
 
 const ChatIcon: React.FC<{className?: string}> = ({ className = "w-16 h-16 text-gray-600" }) => (
@@ -36,26 +38,28 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
   onSwitchChatTarget,
   isCurrentChatResponsive,
   lastMessageTimestamps,
+  unreadCounts,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAutoScrolledChatIdRef = useRef<ChatTargetIdOrNull>(null);
 
   useEffect(() => {
-    if (!activeChatTargetId) return; // No messages or scrolling if no chat selected
+    if (!activeChatTargetId) return; 
 
     if (messages && messages.length > 0) {
+      // Always use "auto" for programmatic scrolls to ensure instant jump to bottom.
+      // This applies when first viewing a chat, returning to it, or when new messages arrive.
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      
+      // Update ref if this chat was different from the one previously auto-scrolled to its bottom.
+      // This helps distinguish a "fresh" view of a chat.
       if (activeChatTargetId !== lastAutoScrolledChatIdRef.current) {
-        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-        lastAutoScrolledChatIdRef.current = activeChatTargetId; 
-      } else {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage && !lastMessage.isLoading) {
-             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        } else if (lastMessage && lastMessage.isLoading && lastMessage.sender === Sender.Lily) {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-        }
+        lastAutoScrolledChatIdRef.current = activeChatTargetId;
       }
     }
+    // If messages.length is 0 (empty chat), lastAutoScrolledChatIdRef is not updated.
+    // This means if user views Lily -> EmptyChat -> Lily, the ref will still point to Lily,
+    // and the scroll behavior will be "auto" (instant jump to bottom), not treating it as a "new" chat.
   }, [messages, activeChatTargetId]);
 
 
@@ -86,7 +90,9 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
           Conversations
         </h2>
         <ul className="space-y-2 flex-grow overflow-y-auto custom-scrollbar">
-          {sortedChatContacts.map((contact) => (
+          {sortedChatContacts.map((contact) => {
+            const unreadCount = unreadCounts[contact.id] || 0;
+            return (
             <li 
               key={contact.id}
               className={`p-3 rounded-lg cursor-pointer shadow-md hover:bg-teal-700/80 transition-colors duration-150
@@ -98,13 +104,21 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${activeChatTargetId === contact.id ? 'bg-teal-500' : 'bg-gray-500'}`}>
                   {contact.avatarInitial}
                 </div>
-                <div className="overflow-hidden">
-                  <span className="font-medium text-gray-100 truncate block">{contact.name}</span>
+                <div className="overflow-hidden flex-grow">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-gray-100 truncate block">{contact.name}</span>
+                    {unreadCount > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-xs font-semibold px-1.5 h-5 flex items-center justify-center rounded-full" aria-label={`${unreadCount} unread messages`}>
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
                   {contact.description && <span className="text-xs text-gray-400 truncate block">{contact.description}</span>}
                 </div>
               </div>
             </li>
-          ))}
+          );
+        })}
         </ul>
         <div className="mt-auto text-center text-xs text-gray-500 p-2">
             Device ID: TERM-04A
