@@ -45,13 +45,16 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
 }) => {
   const canGoBack = isChatActive || isFilesLockedActive || isFilesUnlockedActive || isBrowserActive || isCalculatorActive || isOverviewVisible;
 
+  const baseButtonClasses = "p-3 rounded-full text-gray-300 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-teal-500";
+  const interactiveButtonClasses = "hover:bg-gray-700 hover:text-white active:bg-gray-600";
+
   return (
     <nav className="w-full bg-gray-900 bg-opacity-80 backdrop-blur-sm shadow-t-lg border-t border-gray-700">
       <div className="max-w-md mx-auto flex justify-around items-center h-16 px-2">
         <button
           onClick={onBackClick}
           aria-label={canGoBack ? "Go Back" : "Back (disabled)"}
-          className={`p-3 rounded-full text-gray-300 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 transition-colors duration-150 ${!canGoBack ? 'opacity-50 cursor-default' : 'hover:text-white'}`}
+          className={`${baseButtonClasses} ${!canGoBack ? 'opacity-50 cursor-default' : interactiveButtonClasses}`}
           disabled={!canGoBack}
         >
           <BackIcon className="w-7 h-7" />
@@ -59,14 +62,18 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
         <button
           onClick={onHomeClick}
           aria-label="Go to Home Screen"
-          className="p-3 rounded-full text-gray-300 hover:bg-gray-700 hover:text-white focus:outline-none focus:bg-gray-700 transition-colors duration-150"
+          className={`${baseButtonClasses} ${interactiveButtonClasses}`}
         >
           <HomeIcon className="w-7 h-7" />
         </button>
         <button
           onClick={onOverviewClick}
           aria-label="Overview of open applications"
-          className={`p-3 rounded-full text-gray-300 hover:bg-gray-700 focus:outline-none focus:bg-gray-700 transition-colors duration-150 ${isOverviewVisible ? 'text-teal-400 bg-gray-700' : 'hover:text-white'}`}
+          className={`${baseButtonClasses} ${
+            isOverviewVisible
+              ? 'text-teal-400 bg-gray-700' // "ON" state for overview mode
+              : interactiveButtonClasses    // Standard interactive classes when overview is "OFF"
+          }`}
         >
             <OverviewIcon className="w-6 h-6" /> 
         </button>
