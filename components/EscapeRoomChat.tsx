@@ -15,7 +15,7 @@ interface EscapeRoomChatProps {
   isApiKeyAvailable: boolean; 
   chatContacts: ChatContact[];
   activeChatTargetId: ChatTargetIdOrNull; 
-  onSwitchChatTarget: (targetId: ChatTargetIdOrNull) => void; // Modified to accept null
+  onSwitchChatTarget: (targetId: ChatTargetIdOrNull) => void; 
   isCurrentChatResponsive: boolean;
   lastMessageTimestamps: Record<ChatTargetId, number>; 
   unreadCounts: Record<ChatTargetId, number>; 
