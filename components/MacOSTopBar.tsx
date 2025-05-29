@@ -1,12 +1,15 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
+import { AppNotification } from '@/App'; 
 
 interface MacOSTopBarProps {
-  gameName: string;
-  onRequestSignOut: () => void; // Renamed from onSignOut
+  onRequestSignOut: () => void;
+  currentNotification: AppNotification | null;
+  onNotificationClick: () => void; 
 }
 
-const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut }) => {
+const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ onRequestSignOut, currentNotification, onNotificationClick }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
   const [isSessionMenuOpen, setIsSessionMenuOpen] = useState<boolean>(false);
   const sessionMenuRef = useRef<HTMLDivElement>(null);
@@ -41,7 +44,7 @@ const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut })
 
   const handleSignOutClick = () => {
     setIsSessionMenuOpen(false);
-    onRequestSignOut(); // Call the renamed prop
+    onRequestSignOut();
   };
 
   return (
@@ -49,14 +52,12 @@ const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut })
       className="fixed top-0 left-0 right-0 h-8 bg-gray-800/90 text-gray-200 flex items-center justify-between px-3 text-sm shadow-sm backdrop-blur-sm z-30 select-none"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
-      <div className="flex items-center space-x-4">
-        <span className="font-semibold">{gameName}</span>
-        {/* currentAppTitle rendering removed */}
-        
+      {/* Left Section */}
+      <div className="flex-shrink-0">
         <div className="relative" ref={sessionMenuRef}>
           <button 
             onClick={toggleSessionMenu} 
-            className="hover:bg-gray-700 px-2 py-1 rounded"
+            className="hover:bg-gray-700 px-2 py-0.5 rounded"
             aria-haspopup="true"
             aria-expanded={isSessionMenuOpen}
           >
@@ -75,7 +76,25 @@ const MacOSTopBar: React.FC<MacOSTopBarProps> = ({ gameName, onRequestSignOut })
           )}
         </div>
       </div>
-      <div className="text-gray-300">
+
+      {/* Center Section - Notification */}
+      <div className="flex-grow flex justify-center items-center overflow-hidden mx-2">
+        {currentNotification && (
+          <button
+            key={currentNotification.key}
+            onClick={onNotificationClick}
+            className="px-2.5 py-0.5 bg-teal-600 hover:bg-teal-500 text-white text-xs rounded-md shadow-md animate-fadeInOutMacNotif truncate cursor-pointer focus:outline-none focus:ring-1 focus:ring-teal-300 max-w-full"
+            role="alert"
+            aria-live="assertive"
+            title={`Click to open chat: ${currentNotification.message}`}
+          >
+            {currentNotification.message}
+          </button>
+        )}
+      </div>
+      
+      {/* Right Section */}
+      <div className="flex-shrink-0 text-gray-300">
         {currentTime}
       </div>
     </div>

@@ -32,6 +32,17 @@
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
         background: #718096; /* gray-500 */
       }
+
+      /* Notification animation for Mac OS Top Bar */
+      @keyframes fadeInOutMacNotif {
+        0% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+        10% { opacity: 1; transform: translateY(0) scale(1); }
+        90% { opacity: 1; transform: translateY(0) scale(1); }
+        100% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+      }
+      .animate-fadeInOutMacNotif {
+        animation: fadeInOutMacNotif 5s ease-in-out forwards;
+      }
     </style>
      <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,5 +63,4 @@
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
-</html><link rel="stylesheet" href="index.css">
-<script src="index.tsx" type="module"></script>
+</html>

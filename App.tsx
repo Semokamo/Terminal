@@ -24,7 +24,8 @@ import {
     API_KEY_ERROR_MESSAGE, SYSTEM_INSTRUCTION, LILY_TYPING_MESSAGE, 
     IMAGE_GENERATION_ERROR_MESSAGE, RELOCATION_UNIT_CHAT_HISTORY, 
     CHAT_CONTACT_LIST, LILY_CHAT_SPEAKER_NAME, GALLERY_PIN, 
-    SKULLS_SYSTEM_PASSWORD, CHUTE_KEYPAD_SEQUENCE, NO_CHAT_SELECTED_DISPLAY_NAME
+    SKULLS_SYSTEM_PASSWORD, CHUTE_KEYPAD_SEQUENCE, NO_CHAT_SELECTED_DISPLAY_NAME,
+    SUBJECT_34_PROFILE_NAME
 } from './constants';
 import { Message, Sender, ChatTargetId, ChatContact, View as AppView, ChatTargetIdOrNull } from './types'; 
 import { initChatSession, sendMessageToChat } from './services/geminiService';
@@ -36,8 +37,6 @@ export interface OverviewApp {
   title: string;
   status: string;
 }
-
-const GAME_NAME = "Terminal Echoes";
 
 const initialChatHistoriesState: Record<ChatTargetId, Message[]> = {
   lily: [],
@@ -53,6 +52,12 @@ const initialUnreadCounts: Record<ChatTargetId, number> = {
   subject33: 0,
 };
 
+export interface AppNotification {
+  message: string;
+  key: number; // For re-triggering animations
+  chatTargetId?: ChatTargetId; // Optional: to specify which chat to open
+}
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('game_start');
   const [appStatus, setAppStatus] = useState<AppStatus>('uninitialized');
@@ -62,6 +67,7 @@ const App: React.FC = () => {
   const [chatHistories, setChatHistories] = useState<Record<ChatTargetId, Message[]>>(initialChatHistoriesState);
   const [activeChatTargetId, setActiveChatTargetId] = useState<ChatTargetIdOrNull>(null);
   const activeChatTargetIdRef = useRef<ChatTargetIdOrNull>(null); 
+  const [lastOpenedChat, setLastOpenedChat] = useState<ChatTargetIdOrNull>(null);
 
   const [isCurrentChatResponsive, setIsCurrentChatResponsive] = useState<boolean>(false);
   const [isLilyTyping, setIsLilyTyping] = useState<boolean>(false);
@@ -92,9 +98,53 @@ const App: React.FC = () => {
   const [messengerFirstOpenedThisSession, setMessengerFirstOpenedThisSession] = useState<boolean>(false);
   const [unreadCounts, setUnreadCounts] = useState<Record<ChatTargetId, number>>(initialUnreadCounts);
 
+  const [notificationQueue, setNotificationQueue] = useState<AppNotification[]>([]);
+  const [currentNotification, setCurrentNotification] = useState<AppNotification | null>(null);
+  const notificationDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+
   const MIN_TYPING_DELAY = 700;
   const MAX_TYPING_DELAY = 4000;
   const TYPING_DELAY_PER_CHAR = 40;
+
+  const displayNotification = useCallback((msgText: string, senderName?: string, targetChatId?: ChatTargetId) => {
+    const fullMessage = senderName ? `${senderName}: ${msgText}` : msgText;
+    const truncatedMessage = fullMessage.length > 60 ? `${fullMessage.substring(0, 57)}...` : fullMessage;
+  
+    const newNotification: AppNotification = { 
+      message: truncatedMessage, 
+      key: Date.now(), 
+      chatTargetId: targetChatId 
+    };
+    
+    setNotificationQueue(prevQueue => [...prevQueue, newNotification]);
+  }, []);
+
+  useEffect(() => {
+    if (currentNotification) {
+      // If a notification is active, set a timer to clear it
+      const timerId = setTimeout(() => {
+        setCurrentNotification(null);
+      }, 2000); // Display for 2 seconds
+      notificationDismissTimerRef.current = timerId; // Store it
+      return () => clearTimeout(timerId); // Cleanup this specific timer
+    } else if (notificationQueue.length > 0) {
+      // If no active notification, but queue has items, process next
+      const nextNotification = notificationQueue[0];
+      setCurrentNotification(nextNotification);
+      setNotificationQueue(prevQueue => prevQueue.slice(1));
+      // The effect will re-run when currentNotification is set, then the timer part will activate.
+    }
+  }, [currentNotification, notificationQueue]);
+
+  useEffect(() => {
+    // Global cleanup timer on unmount
+    return () => {
+      if (notificationDismissTimerRef.current) {
+        clearTimeout(notificationDismissTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     activeChatTargetIdRef.current = activeChatTargetId;
@@ -303,6 +353,7 @@ const App: React.FC = () => {
                 });
                 if (!messageIsSeen) {
                   setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+                  displayNotification(segment.content, SUBJECT_34_PROFILE_NAME, 'lily');
                 }
                 setLastMessageTimestamps(prev => ({ ...prev, lily: newLilyMessage.timestamp.getTime() }));
             }
@@ -310,7 +361,10 @@ const App: React.FC = () => {
             if (!aiInstance) {
                  const errorMsg: Message = { id: `lily-img-error-no-ai-${Date.now()}`, sender: Sender.Lily, text: IMAGE_GENERATION_ERROR_MESSAGE, isLoading: false, isError: true, timestamp: new Date(), isSeen: messageIsSeen };
                  setChatHistories(prev => ({...prev, lily: [...prev.lily, errorMsg]}));
-                 if (!messageIsSeen) setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+                 if (!messageIsSeen) {
+                    setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+                    displayNotification(IMAGE_GENERATION_ERROR_MESSAGE, SUBJECT_34_PROFILE_NAME, 'lily');
+                 }
                  continue;
             }
             const imageMessageId = `img-${Date.now()}-${i}`;
@@ -325,9 +379,10 @@ const App: React.FC = () => {
             setChatHistories(prev => ({...prev, lily: [...prev.lily, initialImageMessage]}));
             if (!messageIsSeen) {
                 setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+                displayNotification("Sent an image", SUBJECT_34_PROFILE_NAME, 'lily');
             }
 
-            if (!initialCall) updateActiveApps('chat', 'Messenger', `${LILY_CHAT_SPEAKER_NAME} is sending an image...`);
+            if (!initialCall) updateActiveApps('chat', 'Messenger', `${SUBJECT_34_PROFILE_NAME} is sending an image...`);
             try {
                 const imageUrl = "https://via.placeholder.com/300x200.png?text=Dynamic+Image+Placeholder"; 
                 setChatHistories(prev => {
@@ -355,7 +410,7 @@ const App: React.FC = () => {
         }
     }
     setIsLilyTyping(false); 
-  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay]); 
+  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay, displayNotification]); 
 
   const initializeLilyChat = useCallback(async () => {
     if (!aiInstance || lilyChatInitialized) {
@@ -363,9 +418,13 @@ const App: React.FC = () => {
         setChatError("AI Service not initialized.");
         const currentActiveChat = activeChatTargetIdRef.current;
         const errorMsgIsSeen = currentActiveChat === 'lily';
-        const errorMsg: Message = { id: 'ai-init-error', sender: Sender.System, text: "Error: AI Service not initialized.", timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
+        const errorMsgText = "Error: AI Service not initialized.";
+        const errorMsg: Message = { id: 'ai-init-error', sender: Sender.System, text: errorMsgText, timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
         setChatHistories(prev => ({...prev, lily: [errorMsg]}));
-        if (!errorMsgIsSeen) setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
+        if (!errorMsgIsSeen) {
+          setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
+          displayNotification(errorMsgText, undefined, 'lily');
+        }
       }
       return;
     }
@@ -382,20 +441,24 @@ const App: React.FC = () => {
       setLilyChatSession(newChat);
     } catch (error) {
       console.error("Error initializing Lily chat session:", error);
-      const errorText = `Error starting ${LILY_CHAT_SPEAKER_NAME} session: ${error instanceof Error ? error.message : String(error)}`;
+      const errorText = `Error starting ${SUBJECT_34_PROFILE_NAME} session: ${error instanceof Error ? error.message : String(error)}`;
       setChatError(errorText);
       const currentActiveChat = activeChatTargetIdRef.current;
       const errorMsgIsSeen = currentActiveChat === 'lily';
       const errorMsg: Message = { id: `init-error-${Date.now()}`, sender: Sender.System, text: errorText, timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
       setChatHistories(prev => ({...prev, lily: [...prev.lily, errorMsg]}));
-      if(!errorMsgIsSeen) setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
+      if(!errorMsgIsSeen) {
+        setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
+        displayNotification(errorText, undefined, 'lily');
+      }
       setLilyChatInitialized(false);
       updateActiveApps('chat', 'Messenger', 'Error starting chat');
     }
-  }, [aiInstance, lilyChatInitialized, updateActiveApps]);
+  }, [aiInstance, lilyChatInitialized, updateActiveApps, displayNotification]);
 
   const handleSwitchChatTarget = useCallback(async (targetId: ChatTargetId) => {
     setActiveChatTargetId(targetId);
+    setLastOpenedChat(targetId); // Remember this chat for reopening messenger
     const contact = CHAT_CONTACT_LIST.find(c => c.id === targetId);
     setIsCurrentChatResponsive(contact ? contact.isResponsive : false);
 
@@ -414,7 +477,7 @@ const App: React.FC = () => {
     });
     setUnreadCounts(prevUnread => ({ ...prevUnread, [targetId]: 0 }));
     
-    const status = contact ? (contact.description || `Chat with ${targetId === 'lily' ? LILY_CHAT_SPEAKER_NAME : contact.name}`) : 'No active chat';
+    const status = contact ? (contact.description || `Chat with ${targetId === 'lily' ? SUBJECT_34_PROFILE_NAME : contact.name}`) : 'No active chat';
     updateActiveApps('chat', 'Messenger', status);
 
   }, [appStatus, aiInstance, lilyChatInitialized, initializeLilyChat, updateActiveApps]);
@@ -422,28 +485,24 @@ const App: React.FC = () => {
   const navigateToChat = useCallback((targetId?: ChatTargetId) => {
     if (appStatus !== 'api_ready') {
       setCurrentView('home');
-      setActiveChatTargetId(null); // Ensure active chat is null if API not ready
+      setActiveChatTargetId(null); 
       return;
     }
+    if (isOverviewVisible) setIsOverviewVisible(false);
 
     if (!messengerFirstOpenedThisSession) {
       setCurrentView('chat');
-      setActiveChatTargetId(null);
+      setActiveChatTargetId(null); // Initially no chat selected
       setIsCurrentChatResponsive(false);
       setMessengerFirstOpenedThisSession(true);
       updateActiveApps('chat', 'Messenger', 'Select a conversation');
     } else {
       setCurrentView('chat');
-      const effectiveTargetId = targetId || activeChatTargetId || 'lily'; 
-      if (effectiveTargetId) { 
-         handleSwitchChatTarget(effectiveTargetId);
-      } else { 
-         handleSwitchChatTarget('lily');
-      }
+      // Prioritize explicit targetId, then lastOpenedChat, then default to 'lily'
+      const chatToOpen = targetId || lastOpenedChat || 'lily';
+      handleSwitchChatTarget(chatToOpen);
     }
-
-    if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [appStatus, isOverviewVisible, handleSwitchChatTarget, messengerFirstOpenedThisSession, activeChatTargetId, updateActiveApps]);
+  }, [appStatus, isOverviewVisible, handleSwitchChatTarget, messengerFirstOpenedThisSession, lastOpenedChat, updateActiveApps]);
 
 
   useEffect(() => {
@@ -454,11 +513,17 @@ const App: React.FC = () => {
 
   const navigateToHome = useCallback(() => {
     if (isOverviewVisible) setIsOverviewVisible(false);
+    if (currentView === 'chat' && activeChatTargetId) {
+        // No need to setLastOpenedChat here, handleSwitchChatTarget already does.
+    }
     setCurrentView('home');
     setActiveChatTargetId(null); 
-  }, [isOverviewVisible]);
+  }, [isOverviewVisible, currentView, activeChatTargetId]);
 
   const navigateToFiles = useCallback(() => { 
+    if (currentView === 'chat' && activeChatTargetId) {
+        // No need to setLastOpenedChat here
+    }
     if (filesUnlocked) {
         setCurrentView('files_unlocked');
         updateActiveApps('files_unlocked', 'Files', 'Contents Unlocked');
@@ -468,7 +533,7 @@ const App: React.FC = () => {
     }
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, updateActiveApps, filesUnlocked]);
+  }, [isOverviewVisible, updateActiveApps, filesUnlocked, currentView, activeChatTargetId]);
 
   const handleFilesUnlock = useCallback((pin: string): boolean => { 
     if (pin === GALLERY_PIN) { 
@@ -484,6 +549,9 @@ const App: React.FC = () => {
   }, [setActiveAppsInOverview]);
   
   const navigateToBrowser = useCallback(() => {
+    if (currentView === 'chat' && activeChatTargetId) {
+        // No need to setLastOpenedChat here
+    }
     setCurrentView('browser');
     let statusText = 'Idle';
     if (browserCurrentUrl) {
@@ -496,7 +564,7 @@ const App: React.FC = () => {
     updateActiveApps('browser', 'Web Browser', statusText);
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked]);
+  }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked, currentView, activeChatTargetId]);
 
   const handleSkullsSystemUnlockAttempt = (password: string): boolean => {
     if (password === SKULLS_SYSTEM_PASSWORD) {
@@ -524,19 +592,20 @@ const App: React.FC = () => {
   };
 
   const navigateToCalculator = useCallback(() => {
+    if (currentView === 'chat' && activeChatTargetId) {
+      // No need to setLastOpenedChat here
+    }
     setCurrentView('calculator');
     updateActiveApps('calculator', 'Calculator', calculatorDisplayValue);
     setActiveChatTargetId(null); 
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, calculatorDisplayValue, updateActiveApps]);
+  }, [isOverviewVisible, calculatorDisplayValue, updateActiveApps, currentView, activeChatTargetId]);
 
   const handleBackNavigation = () => {
     if (isOverviewVisible) {
       setIsOverviewVisible(false);
       return;
     }
-    // For any app view, back navigates to home and clears active chat.
-    // If already on home, it does nothing (or could show sign out, but current Mac bar handles that).
     if (currentView !== 'home') {
         navigateToHome();
     }
@@ -579,12 +648,12 @@ const App: React.FC = () => {
           await processAndDisplayLilyResponse(responseText);
         } else {
           console.error("Gemini API response did not contain valid text. Full response:", genAIResponse);
-          let feedbackMessage = `${LILY_CHAT_SPEAKER_NAME} sent an empty or invalid response.`;
+          let feedbackMessage = `${SUBJECT_34_PROFILE_NAME} sent an empty or invalid response.`;
 
           if (genAIResponse?.candidates?.[0]?.finishReason && genAIResponse.candidates[0].finishReason !== 'STOP') {
-             feedbackMessage = `${LILY_CHAT_SPEAKER_NAME}'s response might have been blocked or incomplete. (Reason: ${genAIResponse.candidates[0].finishReason})`;
+             feedbackMessage = `${SUBJECT_34_PROFILE_NAME}'s response might have been blocked or incomplete. (Reason: ${genAIResponse.candidates[0].finishReason})`;
           } else if (genAIResponse?.promptFeedback?.blockReason) {
-             feedbackMessage = `${LILY_CHAT_SPEAKER_NAME}'s response was blocked. (Reason: ${genAIResponse.promptFeedback.blockReason})`;
+             feedbackMessage = `${SUBJECT_34_PROFILE_NAME}'s response was blocked. (Reason: ${genAIResponse.promptFeedback.blockReason})`;
           }
           
           setChatError(feedbackMessage);
@@ -595,16 +664,17 @@ const App: React.FC = () => {
           setChatHistories(prev => ({...prev, lily: [...prev.lily, errorSysMsg]}));
            if (currentActiveChat !== 'lily') {
             setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+            displayNotification(feedbackMessage, undefined, 'lily');
           }
           updateActiveApps('chat', 'Messenger', 'Error in chat response');
           setIsLilyTyping(false);
         }
       } catch (error) {
-        console.error(`Error sending message to ${LILY_CHAT_SPEAKER_NAME}:`, error);
+        console.error(`Error sending message to ${SUBJECT_34_PROFILE_NAME}:`, error);
         setChatHistories(prev => ({...prev, lily: prev.lily.filter(m => !(m.isLoading && m.sender === Sender.Lily && m.text === LILY_TYPING_MESSAGE)) }));
         setIsLilyTyping(false);
         
-        const errorText = `${LILY_CHAT_SPEAKER_NAME} seems to be having trouble responding. (Error: ${error instanceof Error ? error.message : String(error)})`;
+        const errorText = `${SUBJECT_34_PROFILE_NAME} seems to be having trouble responding. (Error: ${error instanceof Error ? error.message : String(error)})`;
         setChatError(errorText);
         const currentActiveChat = activeChatTargetIdRef.current;
         const errorApiMsg: Message = {
@@ -613,6 +683,7 @@ const App: React.FC = () => {
         setChatHistories(prev => ({...prev, lily: [...prev.lily, errorApiMsg]}));
         if (currentActiveChat !== 'lily') {
             setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+            displayNotification(errorText, undefined, 'lily');
         }
         updateActiveApps('chat', 'Messenger', 'Error in chat');
       }
@@ -626,7 +697,7 @@ const App: React.FC = () => {
   const toggleOverview = () => setIsOverviewVisible(prev => !prev);
 
   const switchToAppFromOverview = (view: AppView) => {
-    if (view === 'chat') navigateToChat(activeChatTargetId || undefined);  
+    if (view === 'chat') navigateToChat(activeChatTargetId || lastOpenedChat || undefined);  
     else if (view === 'files_locked' || view === 'files_unlocked') navigateToFiles(); 
     else if (view === 'browser') navigateToBrowser();
     else if (view === 'calculator') navigateToCalculator();
@@ -642,29 +713,18 @@ const App: React.FC = () => {
     } else if (viewId === 'calculator') {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
-      setActiveChatTargetId(null);
-      setIsCurrentChatResponsive(false);
-      setMessengerFirstOpenedThisSession(false); 
+      // When chat app is closed from overview, we keep lastOpenedChat.
+      // activeChatTargetId will be set to null if currentView changes.
+      setMessengerFirstOpenedThisSession(false); // This will ensure "Select a conversation" on next open unless a specific chat is targeted
     } else if (viewId === 'files_unlocked' || viewId === 'files_locked') {
       setFilesUnlocked(false);
     }
 
-    // If the closed app was the current view, navigate home and ensure activeChatTargetId is null.
     if (currentView === viewId) {
       setCurrentView('home');
       setActiveChatTargetId(null); 
     }
-  }, [
-    currentView, 
-    // navigateToHome, // Not directly calling navigateToHome to avoid its own setActiveChatTargetId(null) call if already handled
-    setBrowserCurrentUrl, 
-    setSkullsSystemUnlocked, 
-    setCalculatorDisplayValue, 
-    setActiveChatTargetId, 
-    setIsCurrentChatResponsive, 
-    setMessengerFirstOpenedThisSession, 
-    setFilesUnlocked
-  ]);
+  }, [currentView, lastOpenedChat]);
 
   const resetGameState = useCallback(() => {
     setAppStatus('uninitialized');
@@ -672,6 +732,7 @@ const App: React.FC = () => {
     setIsApiKeyActuallyAvailable(false);
     setChatHistories(initialChatHistoriesState);
     setActiveChatTargetId(null); 
+    setLastOpenedChat(null);
     setIsCurrentChatResponsive(false); 
     setMessengerFirstOpenedThisSession(false); 
     setIsLilyTyping(false);
@@ -687,6 +748,12 @@ const App: React.FC = () => {
     setRelocationEta("Calculating..."); 
     setLastMessageTimestamps({ lily: 0, relocation: 0, subject32: 0, subject33: 0 });
     setUnreadCounts(initialUnreadCounts);
+    setCurrentNotification(null);
+    setNotificationQueue([]);
+    if (notificationDismissTimerRef.current) {
+      clearTimeout(notificationDismissTimerRef.current);
+      notificationDismissTimerRef.current = null;
+    }
   }, []);
 
   const requestSignOut = () => {
@@ -711,6 +778,19 @@ const App: React.FC = () => {
   const handleCreditsFinished = useCallback(() => {
     setCurrentView('game_start');
   }, []);
+
+  const handleNotificationClick = useCallback(() => {
+    const targetChat = currentNotification?.chatTargetId || 'lily';
+    navigateToChat(targetChat);
+    
+    // Clear the current notification and its timer immediately
+    if (notificationDismissTimerRef.current) {
+      clearTimeout(notificationDismissTimerRef.current);
+      notificationDismissTimerRef.current = null;
+    }
+    setCurrentNotification(null); 
+    // The useEffect for notifications will then pick up the next one from the queue if any.
+  }, [currentNotification, navigateToChat]);
 
   const renderContent = () => {
     switch (currentView) {
@@ -791,8 +871,9 @@ const App: React.FC = () => {
         <>
           {showMacOSTopBar && (
             <MacOSTopBar
-              gameName={GAME_NAME}
               onRequestSignOut={requestSignOut}
+              currentNotification={currentNotification}
+              onNotificationClick={handleNotificationClick}
             />
           )}
           <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-8' : ''}`}> 
