@@ -58,6 +58,17 @@ export interface AppNotification {
   chatTargetId?: ChatTargetId; // Optional: to specify which chat to open
 }
 
+const LILY_IDLE_CHECK_IN_MESSAGES = [
+  "Are you still there?",
+  "Hello...?",
+  "Everything okay?",
+  "Just checking in...",
+  "Did you manage to find anything new?",
+  "Any luck?",
+  "I'm still here, waiting.",
+  "Please tell me you're still trying to help.",
+];
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('game_start');
   const [appStatus, setAppStatus] = useState<AppStatus>('uninitialized');
@@ -74,6 +85,8 @@ const App: React.FC = () => {
   const [lilyChatSession, setLilyChatSession] = useState<Chat | null>(null);
   const [lilyChatInitialized, setLilyChatInitialized] = useState<boolean>(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [isLilyTrusting, setIsLilyTrusting] = useState<boolean>(false);
+  const lilyIdleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isOverviewVisible, setIsOverviewVisible] = useState<boolean>(false);
   const [activeAppsInOverview, setActiveAppsInOverview] = useState<OverviewApp[]>([]);
@@ -122,23 +135,19 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentNotification) {
-      // If a notification is active, set a timer to clear it
       const timerId = setTimeout(() => {
         setCurrentNotification(null);
-      }, 2000); // Display for 2 seconds
-      notificationDismissTimerRef.current = timerId; // Store it
-      return () => clearTimeout(timerId); // Cleanup this specific timer
+      }, 2000); 
+      notificationDismissTimerRef.current = timerId; 
+      return () => clearTimeout(timerId); 
     } else if (notificationQueue.length > 0) {
-      // If no active notification, but queue has items, process next
       const nextNotification = notificationQueue[0];
       setCurrentNotification(nextNotification);
       setNotificationQueue(prevQueue => prevQueue.slice(1));
-      // The effect will re-run when currentNotification is set, then the timer part will activate.
     }
   }, [currentNotification, notificationQueue]);
 
   useEffect(() => {
-    // Global cleanup timer on unmount
     return () => {
       if (notificationDismissTimerRef.current) {
         clearTimeout(notificationDismissTimerRef.current);
@@ -301,6 +310,18 @@ const App: React.FC = () => {
   }, []);
 
   const processAndDisplayLilyResponse = useCallback(async (responseText: string, initialCall: boolean = false) => {
+    if (!isLilyTrusting) {
+      const trustKeywords = [
+        "i can't believe it", "he's really not coming back", 
+        "get me out of here", "i'll do anything", "tell me what to do",
+        "you're sure?", "you're really here to help" 
+      ];
+      const lowerResponseText = responseText.toLowerCase();
+      if (trustKeywords.some(keyword => lowerResponseText.includes(keyword))) {
+        setIsLilyTrusting(true);
+      }
+    }
+
     const { segments } = parseGeminiResponse(responseText);
     let typingMessageId = `lily-typing-${Date.now()}`;
     const currentActiveChat = activeChatTargetIdRef.current; 
@@ -410,7 +431,7 @@ const App: React.FC = () => {
         }
     }
     setIsLilyTyping(false); 
-  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay, displayNotification]); 
+  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay, displayNotification, isLilyTrusting, setIsLilyTrusting]); 
 
   const initializeLilyChat = useCallback(async () => {
     if (!aiInstance || lilyChatInitialized) {
@@ -458,7 +479,7 @@ const App: React.FC = () => {
 
   const handleSwitchChatTarget = useCallback(async (targetId: ChatTargetId) => {
     setActiveChatTargetId(targetId);
-    setLastOpenedChat(targetId); // Remember this chat for reopening messenger
+    setLastOpenedChat(targetId); 
     const contact = CHAT_CONTACT_LIST.find(c => c.id === targetId);
     setIsCurrentChatResponsive(contact ? contact.isResponsive : false);
 
@@ -492,13 +513,12 @@ const App: React.FC = () => {
 
     if (!messengerFirstOpenedThisSession) {
       setCurrentView('chat');
-      setActiveChatTargetId(null); // Initially no chat selected
+      setActiveChatTargetId(null); 
       setIsCurrentChatResponsive(false);
       setMessengerFirstOpenedThisSession(true);
       updateActiveApps('chat', 'Messenger', 'Select a conversation');
     } else {
       setCurrentView('chat');
-      // Prioritize explicit targetId, then lastOpenedChat, then default to 'lily'
       const chatToOpen = targetId || lastOpenedChat || 'lily';
       handleSwitchChatTarget(chatToOpen);
     }
@@ -514,7 +534,6 @@ const App: React.FC = () => {
   const navigateToHome = useCallback(() => {
     if (isOverviewVisible) setIsOverviewVisible(false);
     if (currentView === 'chat' && activeChatTargetId) {
-        // No need to setLastOpenedChat here, handleSwitchChatTarget already does.
     }
     setCurrentView('home');
     setActiveChatTargetId(null); 
@@ -522,7 +541,6 @@ const App: React.FC = () => {
 
   const navigateToFiles = useCallback(() => { 
     if (currentView === 'chat' && activeChatTargetId) {
-        // No need to setLastOpenedChat here
     }
     if (filesUnlocked) {
         setCurrentView('files_unlocked');
@@ -550,7 +568,6 @@ const App: React.FC = () => {
   
   const navigateToBrowser = useCallback(() => {
     if (currentView === 'chat' && activeChatTargetId) {
-        // No need to setLastOpenedChat here
     }
     setCurrentView('browser');
     let statusText = 'Idle';
@@ -593,7 +610,6 @@ const App: React.FC = () => {
 
   const navigateToCalculator = useCallback(() => {
     if (currentView === 'chat' && activeChatTargetId) {
-      // No need to setLastOpenedChat here
     }
     setCurrentView('calculator');
     updateActiveApps('calculator', 'Calculator', calculatorDisplayValue);
@@ -713,9 +729,7 @@ const App: React.FC = () => {
     } else if (viewId === 'calculator') {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
-      // When chat app is closed from overview, we keep lastOpenedChat.
-      // activeChatTargetId will be set to null if currentView changes.
-      setMessengerFirstOpenedThisSession(false); // This will ensure "Select a conversation" on next open unless a specific chat is targeted
+      setMessengerFirstOpenedThisSession(false); 
     } else if (viewId === 'files_unlocked' || viewId === 'files_locked') {
       setFilesUnlocked(false);
     }
@@ -754,6 +768,11 @@ const App: React.FC = () => {
       clearTimeout(notificationDismissTimerRef.current);
       notificationDismissTimerRef.current = null;
     }
+    setIsLilyTrusting(false);
+    if (lilyIdleTimerRef.current) {
+      clearTimeout(lilyIdleTimerRef.current);
+      lilyIdleTimerRef.current = null;
+    }
   }, []);
 
   const requestSignOut = () => {
@@ -783,14 +802,85 @@ const App: React.FC = () => {
     const targetChat = currentNotification?.chatTargetId || 'lily';
     navigateToChat(targetChat);
     
-    // Clear the current notification and its timer immediately
     if (notificationDismissTimerRef.current) {
       clearTimeout(notificationDismissTimerRef.current);
       notificationDismissTimerRef.current = null;
     }
     setCurrentNotification(null); 
-    // The useEffect for notifications will then pick up the next one from the queue if any.
   }, [currentNotification, navigateToChat]);
+
+  const sendLilyIdleCheckInMessage = useCallback(() => {
+    const randomMessageText = LILY_IDLE_CHECK_IN_MESSAGES[Math.floor(Math.random() * LILY_IDLE_CHECK_IN_MESSAGES.length)];
+    const currentActiveChat = activeChatTargetIdRef.current;
+    const messageIsSeen = currentActiveChat === 'lily';
+
+    const newMessage: Message = {
+      id: `lily-idle-${Date.now()}`,
+      sender: Sender.Lily,
+      text: randomMessageText,
+      timestamp: new Date(),
+      isSeen: messageIsSeen,
+      isLoading: false,
+    };
+
+    setChatHistories(prev => ({
+      ...prev,
+      lily: [...prev.lily, newMessage],
+    }));
+    setLastMessageTimestamps(prev => ({ ...prev, lily: newMessage.timestamp.getTime() }));
+    
+    if (!messageIsSeen) {
+      setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
+      displayNotification(randomMessageText, SUBJECT_34_PROFILE_NAME, 'lily');
+    }
+  }, [displayNotification, activeChatTargetIdRef]);
+
+  useEffect(() => {
+    if (lilyIdleTimerRef.current) {
+      clearTimeout(lilyIdleTimerRef.current);
+      lilyIdleTimerRef.current = null;
+    }
+
+    if (isLilyTrusting && appStatus === 'api_ready' && !isLilyTyping) {
+      const minDelay = 2 * 60 * 1000; 
+      const maxDelay = 5 * 60 * 1000; 
+      
+      const lastInteractionTime = lastMessageTimestamps.lily || 0;
+      const now = Date.now();
+      let timeToWait;
+
+      if (lastInteractionTime === 0 && isLilyTrusting) { // She just became trusting, no prior messages in her chat
+        timeToWait = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+      } else if (lastInteractionTime > 0) {
+        const idealNextCheckInTime = lastInteractionTime + (Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay);
+        timeToWait = idealNextCheckInTime - now;
+      } else {
+        timeToWait = -1; // Don't set timer if no interaction and not just became trusting
+      }
+
+      if (timeToWait > 0) {
+        lilyIdleTimerRef.current = setTimeout(() => {
+          if (isLilyTrusting && appStatus === 'api_ready' && !isLilyTyping) {
+            sendLilyIdleCheckInMessage();
+          }
+        }, timeToWait);
+      }
+    }
+
+    return () => {
+      if (lilyIdleTimerRef.current) {
+        clearTimeout(lilyIdleTimerRef.current);
+        lilyIdleTimerRef.current = null;
+      }
+    };
+  }, [
+    isLilyTrusting,
+    appStatus,
+    isLilyTyping,
+    lastMessageTimestamps.lily,
+    sendLilyIdleCheckInMessage,
+  ]);
+
 
   const renderContent = () => {
     switch (currentView) {
