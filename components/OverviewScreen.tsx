@@ -191,7 +191,15 @@ const OverviewScreen: React.FC<OverviewScreenProps> = ({ apps, onSwitchApp, onCl
     >
       <div
         className="w-full h-full flex flex-col items-center justify-center"
-        onClick={(e) => e.stopPropagation()} 
+        onClick={(e) => {
+          if (apps.length > 0) {
+            e.stopPropagation(); // Prevent click on content area (but not cards themselves) from closing overview
+          } else {
+            // If no apps, clicking the "empty content area" (where "No recent apps" msg is) should close
+            onClose();
+            e.stopPropagation(); // Good practice to still stop after handling
+          }
+        }}
       >
         <h2 id="overview-title" className="text-3xl font-bold text-gray-200 mb-8" style={{ fontFamily: "'Orbitron', sans-serif" }}>
           Recent Apps
