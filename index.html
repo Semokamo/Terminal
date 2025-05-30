@@ -16,28 +16,38 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="TerminalEchoes">
-    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
     <!-- Add more sizes for apple-touch-icon if needed, e.g.: -->
-    <!-- <link rel="apple-touch-icon" sizes="152x152" href="/assets/icons/icon-152x152.png"> -->
-    <!-- <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-180x180.png"> -->
-    <!-- <link rel="apple-touch-icon" sizes="167x167" href="/assets/icons/icon-167x167.png"> -->
+    <!-- <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png"> -->
+    <!-- <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180x180.png"> -->
+    <!-- <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167x167.png"> -->
 
     <!-- Microsoft PWA specific tags -->
     <meta name="msapplication-TileColor" content="#111827">
-    <meta name="msapplication-TileImage" content="/assets/icons/icon-144x144.png">
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body, html, #root {
+      html {
         height: 100%;
         width: 100%;
         margin: 0;
         padding: 0;
-        overflow-x: hidden; /* Prevent horizontal scroll on body */
+        overflow: hidden; /* Prevent viewport scrolling/rubber-banding on html */
       }
       body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden; /* Prevent viewport scrolling/rubber-banding on body */
         font-family: 'Inter', sans-serif;
         background-color: #111827; /* bg-gray-900 default */
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        /* No overflow specified here, as #root itself doesn't scroll; its children do. */
       }
       /* Custom scrollbar for webkit browsers (for chat content) */
       .custom-scrollbar::-webkit-scrollbar {
