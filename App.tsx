@@ -984,7 +984,7 @@ const App: React.FC = () => {
     currentView !== 'credits';
 
   return (
-    <div className="h-screen w-full flex flex-col bg-black"> {/* Reverted to h-screen, removed overflow-hidden */}
+    <div className="h-screen w-screen flex flex-col bg-black">
       {isSigningOut && <SigningOutScreen />}
 
       {!isSigningOut && (
@@ -996,11 +996,9 @@ const App: React.FC = () => {
               onNotificationClick={handleNotificationClick}
             />
           )}
-          {/* This container manages the main content area and API banner, respecting the MacOSTopBar height */}
           <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-8' : ''}`}>
             {showApiKeyBanner && <ApiKeyBanner />}
-            {/* This 'main' tag is where the screen content (like chat) is rendered. It needs to handle overflow/scrolling correctly. */}
-            <main className="flex-grow overflow-y-auto custom-scrollbar relative">
+            <main className="flex-grow overflow-hidden relative">
               {renderContent()}
               {isOverviewVisible && (
                 <OverviewScreen
