@@ -984,7 +984,7 @@ const App: React.FC = () => {
     currentView !== 'credits';
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-black">
+    <div className="h-full w-full flex flex-col bg-black overflow-hidden"> {/* Changed h-screen to h-full and added overflow-hidden */}
       {isSigningOut && <SigningOutScreen />}
 
       {!isSigningOut && (
@@ -996,9 +996,11 @@ const App: React.FC = () => {
               onNotificationClick={handleNotificationClick}
             />
           )}
+          {/* The main content area needs to allow shrinking for the keyboard, but the outer div should not. */}
           <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-8' : ''}`}>
             {showApiKeyBanner && <ApiKeyBanner />}
-            <main className="flex-grow overflow-hidden relative">
+            {/* This 'main' tag is where the screen content (like chat) is rendered. It needs to handle overflow/scrolling correctly. */}
+            <main className="flex-grow overflow-y-auto custom-scrollbar relative"> {/* Ensure this can scroll if content overflows due to keyboard */}
               {renderContent()}
               {isOverviewVisible && (
                 <OverviewScreen
