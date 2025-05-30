@@ -749,17 +749,11 @@ const App: React.FC = () => {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
       setMessengerFirstOpenedThisSession(false);
-      // If chat app is closed from overview, and it was the current view,
-      // reset activeChatTargetId. This ensures that if the user then opens
-      // Messenger from the home screen icon, it defaults to the chat list
-      // (via messengerFirstOpenedThisSession being false) rather than a stale specific chat.
+      setLastOpenedChat(null); // Reset the last opened chat when Messenger is closed from overview.
+      
+      // If chat app was the current view when closed from overview, also reset activeChatTargetId.
       if (currentView === 'chat') {
          setActiveChatTargetId(null);
-         // Also, ensure lastOpenedChat is cleared if the *entire* chat app is closed.
-         // This prevents reopening to a specific chat if the "app" was meant to be fully closed.
-         // For now, let's keep lastOpenedChat as is, and messengerFirstOpenedThisSession=false
-         // will handle showing the list. The user can then pick a chat if they want.
-         // setLastOpenedChat(null); // Optional: more aggressive reset
       }
     } else if (viewId === 'files_unlocked' || viewId === 'files_locked') {
       setFilesUnlocked(false);
@@ -768,7 +762,7 @@ const App: React.FC = () => {
     if (currentView === viewId) {
       setCurrentView('home');
     }
-  }, [currentView]);
+  }, [currentView]); // Added currentView to dependency array
 
   const resetGameState = useCallback(() => {
     setAppStatus('uninitialized');
