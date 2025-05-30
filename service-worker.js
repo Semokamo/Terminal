@@ -35,23 +35,38 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        console.log('Opened cache');
+        console.log('SW Install: Opened cache', CACHE_NAME);
         // AddAll will fetch and cache all specified URLs.
         // If any fetch fails, the entire install step fails.
         return cache.addAll(URLS_TO_CACHE.map(url => new Request(url, { mode: 'cors' })))
+          .then(() => {
+            console.log('SW Install: All URLs in URLS_TO_CACHE successfully cached.');
+          })
           .catch(error => {
-            console.error('Failed to cache one or more URLs during install:', error, URLS_TO_CACHE);
-            // Attempt to cache essential files individually to see which one fails.
+            console.error('SW Install: Caching failed for one or more URLs during cache.addAll(). See details below.', error);
+            // Attempt to fetch and log status for each URL individually to pinpoint the failure.
             URLS_TO_CACHE.forEach(url => {
-              fetch(new Request(url, { mode: 'cors' })).then(response => {
-                if (!response.ok) {
-                  console.error('Failed to fetch (and thus cache) during install:', url, response.status);
-                }
-              }).catch(fetchError => {
-                console.error('Network error for (and thus cache) during install:', url, fetchError);
-              });
+              fetch(new Request(url, { mode: 'cors' }))
+                .then(response => {
+                  if (!response.ok) {
+                    console.error(`SW Install (Detail): Failed to fetch ${url}. Status: ${response.status} ${response.statusText}`);
+                  } else {
+                    // console.log(`SW Install (Detail): Successfully fetched ${url} (status ${response.status}), but it might have failed in cache.addAll if part of a batch.`);
+                  }
+                })
+                .catch(fetchError => {
+                  console.error(`SW Install (Detail): Network error for ${url}. Error:`, fetchError);
+                });
             });
+            // IMPORTANT: Propagate the error to ensure the install fails if addAll failed.
+            throw error;
           });
+      })
+      .then(() => self.skipWaiting()) // Force the new service worker to activate immediately
+      .catch(err => {
+        console.error('SW Install: Caching setup failed entirely.', err);
+         // Ensure the install fails if any step above throws
+        throw err;
       })
   );
 });
@@ -63,47 +78,69 @@ self.addEventListener('activate', event => {
       return Promise.all(
         cacheNames.map(cacheName => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
+            console.log('SW Activate: Deleting old cache', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
+    }).then(() => {
+      console.log('SW Activate: Activated and claimed clients.');
+      return self.clients.claim(); // Ensure the SW takes control of all clients immediately
     })
   );
 });
 
 self.addEventListener('fetch', event => {
+  // console.log('SW Fetching:', event.request.url); // Uncomment for debugging fetch events
   event.respondWith(
     caches.match(event.request)
       .then(cachedResponse => {
         // Cache hit - return response
         if (cachedResponse) {
+          // console.log('SW Fetch: Serving from cache:', event.request.url);
           return cachedResponse;
         }
 
         // Not in cache - fetch from network
+        // console.log('SW Fetch: Not in cache, fetching from network:', event.request.url);
         return fetch(event.request).then(
           networkResponse => {
             // Check if we received a valid response and if it's something we want to cache
-            if (!networkResponse || networkResponse.status !== 200) {
-              return networkResponse; // Return error response or non-200 response
+            // Only cache successful GET requests from cacheable origins.
+            // Responses from `no-cors` requests (type 'opaque') have status 0 and cannot be inspected or reliably cached.
+            if (
+              !networkResponse || 
+              networkResponse.status !== 200 || // For non-opaque responses
+              event.request.method !== 'GET' ||
+              !isCacheableAsset(event.request.url)
+            ) {
+              if (networkResponse && networkResponse.type === 'opaque') {
+                // console.log('SW Fetch: Opaque response from network, not caching:', event.request.url);
+              } else if (networkResponse && networkResponse.status !== 200) {
+                // console.log('SW Fetch: Non-200 response from network, not caching:', event.request.url, networkResponse.status);
+              }
+              return networkResponse; 
             }
-
-            // We only want to cache GET requests, and from specific origins (our app, CDNs)
-            if (event.request.method === 'GET' && isCacheableAsset(event.request.url)) {
-              const responseToCache = networkResponse.clone();
-              caches.open(CACHE_NAME)
-                .then(cache => {
-                  cache.put(event.request, responseToCache);
-                });
-            }
+            
+            // console.log('SW Fetch: Caching new network response for:', event.request.url);
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            
             return networkResponse;
           }
         ).catch(error => {
-          console.warn('SW: Network request failed for:', event.request.url, error);
+          console.warn('SW Fetch: Network request failed for:', event.request.url, error);
           // Optionally, return a custom offline fallback page/response here if appropriate
           // For example, if it's an image request and you have a placeholder:
           // if (event.request.destination === 'image') {
           //   return caches.match('/offline-placeholder.png');
+          // }
+          // For a more robust offline experience, you might want to return a generic offline page
+          // if (event.request.mode === 'navigate') {
+          //   return caches.match('/offline.html'); // You would need to create and cache an offline.html
           // }
         });
       })
@@ -118,21 +155,23 @@ function isCacheableAsset(urlString) {
       self.location.origin, // Your app's origin
       'https://cdn.tailwindcss.com',
       'https://fonts.googleapis.com',
-      'https://fonts.gstatic.com',
+      'https://fonts.gstatic.com', // Font files are served from here
       'https://esm.sh',
       'https://wallpapers.com' // For the background image
     ];
 
     if (!cacheableOrigins.includes(url.origin)) {
-      return false; // Don't cache from other origins unless explicitly listed
+      // console.log('SW isCacheableAsset: false (origin not cacheable)', url.origin);
+      return false; 
     }
 
     // Add any other specific path patterns to exclude if needed
     // e.g., if (url.pathname.startsWith('/api/')) return false;
-
+    // console.log('SW isCacheableAsset: true', urlString);
     return true;
   } catch (e) {
     // Invalid URL string
+    // console.warn('SW isCacheableAsset: false (invalid URL)', urlString);
     return false;
   }
 }
