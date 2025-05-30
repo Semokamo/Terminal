@@ -48,11 +48,26 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
   const baseButtonClasses = "p-3 rounded-full text-gray-300 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-teal-500";
   const interactiveButtonClasses = "hover:bg-gray-700 hover:text-white active:bg-gray-600";
 
+  const handleBackClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    onBackClick();
+    (event.currentTarget as HTMLButtonElement).blur();
+  };
+
+  const handleHomeClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    onHomeClick();
+    (event.currentTarget as HTMLButtonElement).blur();
+  };
+
+  const handleOverviewClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    onOverviewClick();
+    (event.currentTarget as HTMLButtonElement).blur();
+  };
+
   return (
     <nav className="w-full bg-gray-900 bg-opacity-80 backdrop-blur-sm shadow-t-lg border-t border-gray-700">
-      <div className="max-w-md mx-auto flex justify-around items-center h-16 px-2">
+      <div className="max-w-md mx-auto flex justify-around items-center h-20 px-2"> {/* Increased height from h-16 to h-20 */}
         <button
-          onClick={onBackClick}
+          onClick={handleBackClick}
           aria-label={canGoBack ? "Go Back" : "Back (disabled)"}
           className={`${baseButtonClasses} ${!canGoBack ? 'opacity-50 cursor-default' : interactiveButtonClasses}`}
           disabled={!canGoBack}
@@ -60,14 +75,14 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
           <BackIcon className="w-7 h-7" />
         </button>
         <button
-          onClick={onHomeClick}
+          onClick={handleHomeClick}
           aria-label="Go to Home Screen"
           className={`${baseButtonClasses} ${interactiveButtonClasses}`}
         >
           <HomeIcon className="w-7 h-7" />
         </button>
         <button
-          onClick={onOverviewClick}
+          onClick={handleOverviewClick}
           aria-label="Overview of open applications"
           className={`${baseButtonClasses} ${
             isOverviewVisible
