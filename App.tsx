@@ -26,7 +26,7 @@ import {
     SKULLS_SYSTEM_PASSWORD, CHUTE_KEYPAD_SEQUENCE, NO_CHAT_SELECTED_DISPLAY_NAME,
     SUBJECT_34_PROFILE_NAME
 } from './constants';
-import { Message, Sender, ChatTargetId, ChatContact, View as AppView, ChatTargetIdOrNull } from './types';
+import { Message, Sender, ChatTargetId, ChatContact, View as AppView, ChatTargetIdOrNull, BrowserContentView } from './types';
 import { initChatSession, sendMessageToChat } from './services/geminiService';
 
 type AppStatus = 'uninitialized' | 'initializing_api' | 'api_ready' | 'api_error';
@@ -68,6 +68,8 @@ const LILY_IDLE_CHECK_IN_MESSAGES = [
   "Please tell me you're still trying to help.",
 ];
 
+const MAX_BROWSER_HISTORY_LENGTH = 50;
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>('game_start');
   const [appStatus, setAppStatus] = useState<AppStatus>('uninitialized');
@@ -91,6 +93,10 @@ const App: React.FC = () => {
   const [activeAppsInOverview, setActiveAppsInOverview] = useState<OverviewApp[]>([]);
 
   const [browserCurrentUrl, setBrowserCurrentUrl] = useState<string>('');
+  const [browserHistory, setBrowserHistory] = useState<string[]>([]);
+  const [browserBookmarks, setBrowserBookmarks] = useState<string[]>(['skulls.system']);
+  const [browserContentView, setBrowserContentView] = useState<BrowserContentView>('page');
+
   const [calculatorDisplayValue, setCalculatorDisplayValue] = useState<string>("0");
 
   const [filesUnlocked, setFilesUnlocked] = useState<boolean>(false);
@@ -404,7 +410,15 @@ const App: React.FC = () => {
 
             if (!initialCall) updateActiveApps('chat', 'Messenger', `${SUBJECT_34_PROFILE_NAME} is sending an image...`);
             try {
-                const imageUrl = "https://via.placeholder.com/300x200.png?text=Dynamic+Image+Placeholder";
+                // Placeholder: Simulating image generation for now
+                const response = await aiInstance.models.generateImages({
+                    model: 'imagen-3.0-generate-002', // Use the correct model
+                    prompt: segment.content,
+                    config: {numberOfImages: 1, outputMimeType: 'image/jpeg'},
+                });
+                const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+                const imageUrl = `data:image/jpeg;base64,${base64ImageBytes}`;
+
                 setChatHistories(prev => {
                     const updatedHistory = prev.lily.map(msg =>
                         msg.id === imageMessageId ? { ...msg, imageUrl, isLoading: false } : msg
@@ -480,16 +494,12 @@ const App: React.FC = () => {
     setActiveChatTargetId(targetId);
 
     if (targetId === null) {
-      // User is viewing the chat list
       setIsCurrentChatResponsive(false);
       updateActiveApps('chat', 'Messenger', 'Select a conversation');
-      // Do not change lastOpenedChat here when switching to chat list.
-      // lastOpenedChat should retain the ID of the last *specific* chat.
       return;
     }
 
-    // Logic for when a specific chat target is selected
-    setLastOpenedChat(targetId); // Set lastOpenedChat when a specific chat is chosen
+    setLastOpenedChat(targetId);
     const contact = CHAT_CONTACT_LIST.find(c => c.id === targetId);
     setIsCurrentChatResponsive(contact ? contact.isResponsive : false);
 
@@ -527,14 +537,12 @@ const App: React.FC = () => {
     if (!messengerFirstOpenedThisSession) {
       setCurrentView('chat');
       setMessengerFirstOpenedThisSession(true);
-      handleSwitchChatTarget(null); // Open to chat list first time
+      handleSwitchChatTarget(null); 
     } else {
       setCurrentView('chat');
-      if (targetId !== undefined) { // Explicit target (can be null for list, or a ChatTargetId)
+      if (targetId !== undefined) { 
           handleSwitchChatTarget(targetId);
-      } else { // No explicit target (e.g. home screen icon), use fallback
-          // If lastOpenedChat is null (e.g. never opened a specific chat, or went to chat list then home),
-          // then default to chat list (null). Otherwise, open lastOpenedChat.
+      } else { 
           handleSwitchChatTarget(lastOpenedChat || null);
       }
     }
@@ -576,22 +584,39 @@ const App: React.FC = () => {
       return true;
     }
     return false;
-  }, [setActiveAppsInOverview]);
+  }, []);
 
+  const getBrowserAppStatus = useCallback(() => {
+    switch (browserContentView) {
+      case 'history':
+        return 'Viewing History';
+      case 'bookmarks':
+        return 'Viewing Bookmarks';
+      case 'page':
+      default:
+        if (browserCurrentUrl) {
+          if (browserCurrentUrl.toLowerCase() === 'skulls.system') {
+            return skullsSystemUnlocked ? 'skulls.system - Unlocked' : 'skulls.system - Locked';
+          }
+          return `Visiting: ${browserCurrentUrl.length > 20 ? browserCurrentUrl.substring(0, 17) + '...' : browserCurrentUrl}`;
+        }
+        return 'Idle';
+    }
+  }, [browserContentView, browserCurrentUrl, skullsSystemUnlocked]);
+  
   const navigateToBrowser = useCallback(() => {
     setCurrentView('browser');
-    let statusText = 'Idle';
-    if (browserCurrentUrl) {
-        if (browserCurrentUrl.toLowerCase() === 'skulls.system') {
-            statusText = skullsSystemUnlocked ? 'skulls.system - Unlocked' : 'skulls.system - Locked';
-        } else {
-            statusText = `Visiting: ${browserCurrentUrl}`;
-        }
-    }
-    updateActiveApps('browser', 'Web Browser', statusText);
+    updateActiveApps('browser', 'Web Browser', getBrowserAppStatus());
     setActiveChatTargetId(null);
     if (isOverviewVisible) setIsOverviewVisible(false);
-  }, [isOverviewVisible, browserCurrentUrl, updateActiveApps, skullsSystemUnlocked]);
+  }, [isOverviewVisible, updateActiveApps, getBrowserAppStatus]);
+
+  useEffect(() => {
+    if (currentView === 'browser') {
+      updateActiveApps('browser', 'Web Browser', getBrowserAppStatus());
+    }
+  }, [currentView, browserContentView, browserCurrentUrl, skullsSystemUnlocked, updateActiveApps, getBrowserAppStatus]);
+
 
   const handleSkullsSystemUnlockAttempt = (password: string): boolean => {
     if (password === SKULLS_SYSTEM_PASSWORD) {
@@ -607,16 +632,55 @@ const App: React.FC = () => {
   const handleBrowserNavigationRequest = (url: string) => {
     const trimmedUrl = url.trim();
     setBrowserCurrentUrl(trimmedUrl);
-    let statusText = 'Idle';
-    if (trimmedUrl) {
-        if (trimmedUrl.toLowerCase() === 'skulls.system') {
-            statusText = skullsSystemUnlocked ? 'skulls.system - Unlocked' : 'skulls.system - Locked';
-        } else {
-            statusText = `Visiting: ${trimmedUrl}`;
-        }
+    setBrowserContentView('page'); // Always switch to page view on new navigation
+
+    if (trimmedUrl && trimmedUrl.toLowerCase() !== 'skulls.system') {
+        setBrowserHistory(prev => {
+            const newHistory = [trimmedUrl, ...prev.filter(item => item !== trimmedUrl)];
+            return newHistory.slice(0, MAX_BROWSER_HISTORY_LENGTH);
+        });
     }
-    updateActiveApps('browser', 'Web Browser', statusText);
+    updateActiveApps('browser', 'Web Browser', getBrowserAppStatus());
   };
+
+  const addBrowserBookmark = useCallback((urlToAdd: string) => {
+    if (!urlToAdd || urlToAdd.toLowerCase() === 'skulls.system') return;
+
+    setBrowserBookmarks(prevBookmarks => {
+        if (prevBookmarks.includes(urlToAdd)) {
+            return prevBookmarks; 
+        }
+        const otherBookmarks = prevBookmarks.filter(bm => bm.toLowerCase() !== 'skulls.system');
+        const updatedOtherBookmarks = [...otherBookmarks, urlToAdd].sort();
+        return ['skulls.system', ...updatedOtherBookmarks];
+    });
+  }, []);
+
+  const removeBrowserBookmark = useCallback((urlToRemove: string) => {
+      if (!urlToRemove || urlToRemove.toLowerCase() === 'skulls.system') return; 
+
+      setBrowserBookmarks(prevBookmarks => prevBookmarks.filter(bm => bm !== urlToRemove));
+  }, []);
+
+  const isUrlBookmarked = useCallback((url: string) => {
+      return browserBookmarks.includes(url);
+  }, [browserBookmarks]);
+  
+  const handleToggleBookmark = useCallback((url: string) => {
+    if (!url) return;
+    if (url.toLowerCase() === 'skulls.system') {
+      // skulls.system is always bookmarked and cannot be toggled by user.
+      // Optionally display a message or simply do nothing.
+      return;
+    }
+
+    if (isUrlBookmarked(url)) {
+      removeBrowserBookmark(url);
+    } else {
+      addBrowserBookmark(url);
+    }
+  }, [isUrlBookmarked, addBrowserBookmark, removeBrowserBookmark]);
+
 
   const navigateToCalculator = useCallback(() => {
     setCurrentView('calculator');
@@ -631,17 +695,15 @@ const App: React.FC = () => {
       return;
     }
 
-    // Tailwind 'sm' breakpoint is 640px
     const isMobileScreen = window.innerWidth < 640;
 
     if (currentView === 'chat' && isMobileScreen && activeChatTargetId !== null) {
-      // On mobile chat view, if a chat is active, back goes to chat list
-      handleSwitchChatTarget(null); // Use handleSwitchChatTarget to go to list view
+      handleSwitchChatTarget(null); 
+    } else if (currentView === 'browser' && browserContentView !== 'page') {
+        setBrowserContentView('page'); // If in history/bookmarks, back goes to main page view
     } else if (currentView !== 'home') {
-      // Default back behavior: go to home screen
       navigateToHome();
     }
-    // If on home, back button effectively does nothing here (handled by device/browser typically)
   };
 
   const sendMessageChatLogic = async (userInput: string) => {
@@ -730,8 +792,6 @@ const App: React.FC = () => {
   const toggleOverview = () => setIsOverviewVisible(prev => !prev);
 
   const switchToAppFromOverview = (view: AppView) => {
-    // When switching to 'chat' from overview, navigateToChat will use the activeChatTargetId
-    // that was current when overview was opened. If that was null (chat list), it stays null.
     if (view === 'chat') navigateToChat(activeChatTargetId);
     else if (view === 'files_locked' || view === 'files_unlocked') navigateToFiles();
     else if (view === 'browser') navigateToBrowser();
@@ -745,13 +805,14 @@ const App: React.FC = () => {
     if (viewId === 'browser') {
       setBrowserCurrentUrl('');
       setSkullsSystemUnlocked(false);
+      setBrowserHistory([]);
+      // Do NOT reset browserBookmarks here; they persist for the game session
+      setBrowserContentView('page');
     } else if (viewId === 'calculator') {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
       setMessengerFirstOpenedThisSession(false);
-      setLastOpenedChat(null); // Reset the last opened chat when Messenger is closed from overview.
-      
-      // If chat app was the current view when closed from overview, also reset activeChatTargetId.
+      setLastOpenedChat(null); 
       if (currentView === 'chat') {
          setActiveChatTargetId(null);
       }
@@ -762,7 +823,7 @@ const App: React.FC = () => {
     if (currentView === viewId) {
       setCurrentView('home');
     }
-  }, [currentView]); // Added currentView to dependency array
+  }, [currentView]); 
 
   const resetGameState = useCallback(() => {
     setAppStatus('uninitialized');
@@ -797,6 +858,9 @@ const App: React.FC = () => {
       clearTimeout(lilyIdleTimerRef.current);
       lilyIdleTimerRef.current = null;
     }
+    setBrowserHistory([]);
+    setBrowserBookmarks(['skulls.system']);
+    setBrowserContentView('page');
   }, []);
 
   const requestSignOut = () => {
@@ -823,7 +887,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleNotificationClick = useCallback(() => {
-    const targetChat = currentNotification?.chatTargetId || null; // Default to chat list if no specific target
+    const targetChat = currentNotification?.chatTargetId || null; 
     navigateToChat(targetChat);
 
     if (notificationDismissTimerRef.current) {
@@ -944,6 +1008,13 @@ const App: React.FC = () => {
                   onSkullsSystemUnlockAttempt={handleSkullsSystemUnlockAttempt}
                   isSkullsSystemUnlocked={skullsSystemUnlocked}
                   skullsSystemContentComponent={<SkullsSystemScreen relocationEta={relocationEta} />}
+                  history={browserHistory}
+                  bookmarks={browserBookmarks}
+                  isBookmarked={isUrlBookmarked}
+                  onToggleBookmark={handleToggleBookmark}
+                  contentView={browserContentView}
+                  onSetContentView={setBrowserContentView}
+                  onRemoveBookmark={removeBrowserBookmark}
                 />;
       case 'calculator':
         return <CalculatorScreen
