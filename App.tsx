@@ -1203,9 +1203,16 @@ const App: React.FC = () => {
     currentView !== 'system_initiating' &&
     currentView !== 'initial_load' &&
     currentView !== 'credits';
+  
+  // Calculate padding for main content area based on visible fixed elements
+  let mainContentPaddingTop = '';
+  if (showMacOSTopBar) mainContentPaddingTop = 'pt-8'; // MacOSTopBar height
+  
+  let mainContentPaddingBottom = '';
+  if (showNavigationControls) mainContentPaddingBottom = 'pb-16'; // NavigationControls height (h-16)
 
   return (
-    <div className="h-full w-full flex flex-col bg-black">
+    <div className="h-full w-full flex flex-col bg-black relative"> {/* Added relative for fixed positioning context if needed elsewhere */}
       {isSigningOut && <SigningOutScreen />}
 
       {!isSigningOut && (
@@ -1217,9 +1224,13 @@ const App: React.FC = () => {
               onNotificationClick={handleNotificationClick}
             />
           )}
-          <div className={`flex-grow flex flex-col overflow-hidden ${showMacOSTopBar ? 'pt-8' : ''}`}>
+          {/* Main content area that takes remaining space */}
+          <div 
+            className={`flex-grow flex flex-col overflow-hidden 
+                        ${mainContentPaddingTop} ${mainContentPaddingBottom}`}
+          >
             {showApiKeyBanner && <ApiKeyBanner />}
-            <main className="flex-grow overflow-hidden relative">
+            <main className="flex-grow overflow-hidden relative"> {/* This main will contain the actual view */}
               {renderContent()}
               {isOverviewVisible && (
                 <OverviewScreen
@@ -1231,18 +1242,22 @@ const App: React.FC = () => {
               )}
             </main>
           </div>
+          
+          {/* Navigation Controls, now potentially fixed */}
           {showNavigationControls && (
-            <NavigationControls
-              onHomeClick={navigateToHome}
-              onBackClick={handleBackNavigation}
-              onOverviewClick={toggleOverview}
-              isChatActive={currentView === 'chat'}
-              isFilesLockedActive={currentView === 'files_locked'}
-              isFilesUnlockedActive={currentView === 'files_unlocked'}
-              isBrowserActive={currentView === 'browser'}
-              isCalculatorActive={currentView === 'calculator'}
-              isOverviewVisible={isOverviewVisible}
-            />
+            <div className="fixed bottom-0 left-0 right-0 z-20"> {/* Wrapper for fixed positioning */}
+              <NavigationControls
+                onHomeClick={navigateToHome}
+                onBackClick={handleBackNavigation}
+                onOverviewClick={toggleOverview}
+                isChatActive={currentView === 'chat'}
+                isFilesLockedActive={currentView === 'files_locked'}
+                isFilesUnlockedActive={currentView === 'files_unlocked'}
+                isBrowserActive={currentView === 'browser'}
+                isCalculatorActive={currentView === 'calculator'}
+                isOverviewVisible={isOverviewVisible}
+              />
+            </div>
           )}
 
           {isSignOutConfirmVisible && (
@@ -1252,7 +1267,7 @@ const App: React.FC = () => {
               onCancel={cancelSignOut}
             />
           )}
-          {isNewGameConfirmVisible && ( // Added
+          {isNewGameConfirmVisible && ( 
             <NewGameConfirmationDialog
               isOpen={isNewGameConfirmVisible}
               onConfirm={confirmAndStartNewGame}
