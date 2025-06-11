@@ -145,26 +145,33 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
       {/* Main Chat Content Area - Shown when a chat is active */}
       {activeChatTargetId && (
           <main className="flex-grow flex w-full sm:w-auto flex-col overflow-hidden relative">
-            <div 
-              className="p-4 text-xl font-semibold text-teal-400 bg-gray-800 flex items-center justify-center relative border-b border-gray-700"
-            >
-              <button
-                onClick={() => onSwitchChatTarget(null)}
-                className="sm:hidden absolute left-3 top-1/2 transform -translate-y-1/2 p-1 text-teal-300 hover:text-teal-200 rounded-full focus:outline-none focus:ring-1 focus:ring-teal-400"
-                aria-label="Back to conversations list"
+            {/* Chat Header and Sub-header container */}
+            <div className="flex-shrink-0"> {/* This div ensures headers don't grow/shrink */}
+              <div 
+                className="p-4 text-xl font-semibold text-teal-400 bg-gray-800 flex items-center justify-center relative border-b border-gray-700"
               >
-                <BackArrowIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-              </button>
-              <span style={{ fontFamily: "'Orbitron', sans-serif" }} className="truncate px-8 sm:px-0">
-                 {getContactDisplayName(activeChatTargetId)}
-              </span>
+                <button
+                  onClick={() => onSwitchChatTarget(null)}
+                  className="sm:hidden absolute left-3 top-1/2 transform -translate-y-1/2 p-1 text-teal-300 hover:text-teal-200 rounded-full focus:outline-none focus:ring-1 focus:ring-teal-400"
+                  aria-label="Back to conversations list"
+                >
+                  <BackArrowIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                </button>
+                <span style={{ fontFamily: "'Orbitron', sans-serif" }} className="truncate px-8 sm:px-0">
+                   {getContactDisplayName(activeChatTargetId)}
+                </span>
+              </div>
+              <div className="bg-teal-800 bg-opacity-75 text-teal-200 text-xs text-center py-1.5 border-b border-t border-teal-700/60 shadow-inner">
+                  Secure Channel: Messages self-destruct in 24 hours.
+              </div>
             </div>
-            <div className="bg-teal-800 bg-opacity-75 text-teal-200 text-xs text-center py-1.5 border-b border-t border-teal-700/60 shadow-inner">
-                Secure Channel: Messages self-destruct in 24 hours.
-            </div>
+            
+            {/* Messages and Input Area */}
             {(isApiKeyAvailable || messages.length > 0 || activeChatTargetId !== 'lily') ? (
               <>
+                {/* MessageList will take remaining space and scroll */}
                 <MessageList messages={messages} messagesEndRef={messagesEndRef} />
+                {/* UserInput is absolutely positioned at the bottom of this main container */}
                 <div className="absolute bottom-0 left-0 right-0 w-full z-10">
                   <UserInput 
                     onSendMessage={onSendMessage} 
