@@ -40,11 +40,16 @@ const UserInput: React.FC<UserInputProps> = ({ onSendMessage, isLoading, isRespo
           placeholder={placeholderText}
           className="flex-grow p-3 bg-gray-700 text-gray-100 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none placeholder-gray-400"
           disabled={inputDisabled}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck="false"
+          aria-label="Chat message input"
         />
         <button
           type="submit"
           disabled={buttonDisabled}
           className="px-6 py-3 bg-teal-500 text-white font-semibold rounded-lg hover:bg-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-opacity-75 disabled:opacity-50 disabled:cursor-not-allowed transition duration-150"
+          aria-label="Send message"
         >
           Send
         </button>
