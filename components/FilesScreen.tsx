@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GalleryItem } from '../types';
+import { FileItem } from '../types'; // Renamed from GalleryItem
 import { CHUTE_KEYPAD_SEQUENCE, CELL_DOOR_IMAGE_BASE64_DATA } from '../constants';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -31,7 +31,7 @@ const CloseIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4 sm:w
   </svg>
 );
 
-const FileTile: React.FC<{ item: GalleryItem; onClick: () => void; }> = ({ item, onClick }) => {
+const FileTile: React.FC<{ item: FileItem; onClick: () => void; }> = ({ item, onClick }) => { // Renamed GalleryItem to FileItem
   return (
     <button
       onClick={onClick}
@@ -57,7 +57,7 @@ const FileTile: React.FC<{ item: GalleryItem; onClick: () => void; }> = ({ item,
 };
 
 
-const FileViewerModal: React.FC<{ file: GalleryItem | null; isOpen: boolean; onClose: () => void; onMinimize: () => void;}> = ({ file, isOpen, onClose, onMinimize }) => {
+const FileViewerModal: React.FC<{ file: FileItem | null; isOpen: boolean; onClose: () => void; onMinimize: () => void;}> = ({ file, isOpen, onClose, onMinimize }) => { // Renamed GalleryItem to FileItem
   if (!isOpen || !file) return null;
 
   return (
@@ -134,10 +134,10 @@ const FileViewerModal: React.FC<{ file: GalleryItem | null; isOpen: boolean; onC
 
 
 const FilesScreen: React.FC = () => {
-  const [activeOpenFile, setActiveOpenFile] = useState<GalleryItem | null>(null);
+  const [activeOpenFile, setActiveOpenFile] = useState<FileItem | null>(null); // Renamed GalleryItem to FileItem
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
-  const baseGalleryItems: Omit<GalleryItem, 'imageUrl' | 'isLoadingImage' | 'content'>[] = [
+  const baseFileItems: Omit<FileItem, 'imageUrl' | 'isLoadingImage' | 'content'>[] = [ // Renamed GalleryItem to FileItem
     {
       id: "skull-diagram",
       title: "Skull_Network_Diagram.txt",
@@ -166,7 +166,7 @@ const FilesScreen: React.FC = () => {
     },
   ];
 
-  const mappedBaseItems: GalleryItem[] = baseGalleryItems.map((item): GalleryItem => ({
+  const mappedBaseItems: FileItem[] = baseFileItems.map((item): FileItem => ({ // Renamed GalleryItem to FileItem
     id: item.id,
     title: item.title,
     icon: item.icon,
@@ -178,7 +178,7 @@ const FilesScreen: React.FC = () => {
     isLoadingImage: false,
   }));
 
-  const cellDoorImageItem: GalleryItem = {
+  const cellDoorImageItem: FileItem = { // Renamed GalleryItem to FileItem
     id: "cell-door-photo",
     title: "Cell_Door_Detail.jpg",
     icon: <ImageIcon />,
@@ -188,13 +188,13 @@ const FilesScreen: React.FC = () => {
     isLoadingImage: false,
   };
 
-  const galleryItems: GalleryItem[] = [
+  const fileItems: FileItem[] = [ // Renamed GalleryItem to FileItem
     ...mappedBaseItems,
     cellDoorImageItem
   ].sort((a, b) => a.title.localeCompare(b.title));
 
 
-  const handleOpenFile = (item: GalleryItem) => {
+  const handleOpenFile = (item: FileItem) => { // Renamed GalleryItem to FileItem
     setActiveOpenFile(item);
     setIsModalOpen(true);
   };
@@ -246,7 +246,7 @@ const FilesScreen: React.FC = () => {
           <div
             className="w-full flex flex-row flex-wrap gap-4 sm:gap-5 justify-start items-start"
           >
-              {galleryItems.map((item) => (
+              {fileItems.map((item) => ( // Renamed galleryItems to fileItems
               <FileTile
                   key={item.id}
                   item={item}
