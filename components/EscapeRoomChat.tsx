@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useRef, useMemo } from 'react';
 import { Message, ChatTargetId, ChatContact, Sender, ChatTargetIdOrNull } from '../types';
 import { NO_CHAT_SELECTED_DISPLAY_NAME, SUBJECT_34_PROFILE_NAME } from '../constants'; 
@@ -145,7 +144,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
 
       {/* Main Chat Content Area - Shown when a chat is active */}
       {activeChatTargetId && (
-          <main className="flex-grow flex w-full sm:w-auto flex-col overflow-hidden">
+          <main className="flex-grow flex w-full sm:w-auto flex-col overflow-hidden relative">
             <div 
               className="p-4 text-xl font-semibold text-teal-400 bg-gray-800 flex items-center justify-center relative border-b border-gray-700"
             >
@@ -166,12 +165,14 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
             {(isApiKeyAvailable || messages.length > 0 || activeChatTargetId !== 'lily') ? (
               <>
                 <MessageList messages={messages} messagesEndRef={messagesEndRef} />
-                <UserInput 
-                  onSendMessage={onSendMessage} 
-                  isLoading={isLilyTyping && activeChatTargetId === 'lily'} 
-                  isResponsive={isCurrentChatResponsive}
-                  currentContactName={getContactDisplayName(activeChatTargetId)} 
-                />
+                <div className="absolute bottom-0 left-0 right-0 w-full z-10">
+                  <UserInput 
+                    onSendMessage={onSendMessage} 
+                    isLoading={isLilyTyping && activeChatTargetId === 'lily'} 
+                    isResponsive={isCurrentChatResponsive}
+                    currentContactName={getContactDisplayName(activeChatTargetId)} 
+                  />
+                </div>
               </>
             ) : (
               <div className="flex-grow flex flex-col items-center justify-center p-4 text-center bg-gray-800/30">
