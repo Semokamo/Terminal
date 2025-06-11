@@ -2,7 +2,7 @@
 import React from 'react';
 import { Message, Sender } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LILY_CHAT_SPEAKER_NAME, USER_PERSONA_NAME, LILY_TYPING_MESSAGE, IMAGE_GENERATION_ERROR_MESSAGE, KIDNAPPER_SYSTEM_PERSONA_NAME, RELOCATION_UNIT_PERSONA_NAME } from '../constants';
+import { SUBJECT_34_PROFILE_NAME, USER_PERSONA_NAME, LILY_TYPING_MESSAGE, IMAGE_GENERATION_ERROR_MESSAGE, KIDNAPPER_SYSTEM_PERSONA_NAME, RELOCATION_UNIT_PERSONA_NAME } from '../constants';
 
 interface ChatBubbleProps {
   message: Message;
@@ -27,7 +27,7 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({ message }) => {
   }
   
   let senderName = USER_PERSONA_NAME;
-  if (isLily) senderName = LILY_CHAT_SPEAKER_NAME; 
+  if (isLily) senderName = SUBJECT_34_PROFILE_NAME; // Changed from LILY_CHAT_SPEAKER_NAME
   else if (isSystem) senderName = KIDNAPPER_SYSTEM_PERSONA_NAME;
   else if (isRelocationUnit) senderName = RELOCATION_UNIT_PERSONA_NAME;
 
