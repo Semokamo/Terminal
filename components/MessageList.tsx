@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Message } from '../types';
 import ChatBubble from './ChatBubble';
@@ -10,7 +11,7 @@ interface MessageListProps {
 
 const MessageList: React.FC<MessageListProps> = ({ messages, messagesEndRef }) => {
   return (
-    <div className="flex-grow p-4 space-y-4 overflow-y-auto custom-scrollbar bg-gray-800/50">
+    <div className="flex-grow px-4 pt-4 pb-24 space-y-4 overflow-y-auto custom-scrollbar bg-gray-800/50">
       {messages.map((msg) => (
         <ChatBubble key={msg.id} message={msg} />
       ))}
