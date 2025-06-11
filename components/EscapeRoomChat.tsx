@@ -82,7 +82,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
       {/* Chat List Sidebar */}
       <aside 
         className={`
-          p-4 flex flex-col bg-gray-800
+          py-4 flex flex-col bg-gray-800
           sm:border-r sm:border-gray-700
           ${activeChatTargetId ? 
             'hidden sm:flex sm:w-64 sm:flex-shrink-0' : 
@@ -92,7 +92,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
         `}
       >
         <h2 
-          className="text-xl font-semibold text-teal-400 mb-6" 
+          className="text-xl font-semibold text-teal-400 mb-6 px-4" 
           style={{ fontFamily: "'Orbitron', sans-serif" }}
         >
           Conversations
@@ -138,7 +138,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
           );
         })}
         </ul>
-        <div className="mt-auto text-center text-xs text-gray-500 p-2">
+        <div className="mt-auto text-center text-xs text-gray-500 py-2 px-4">
             Device ID: TERM-04A
         </div>
       </aside>
