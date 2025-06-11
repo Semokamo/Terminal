@@ -52,7 +52,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
     if (!activeChatTargetId) return; 
 
     if (messages && messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" }); // Keep auto for immediate jump
       if (activeChatTargetId !== lastAutoScrolledChatIdRef.current) {
         lastAutoScrolledChatIdRef.current = activeChatTargetId;
       }
@@ -65,7 +65,7 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
       return NO_CHAT_SELECTED_DISPLAY_NAME;
     }
     const contact = chatContacts.find(c => c.id === targetId);
-    return contact ? contact.name : "Unknown Contact"; // Always use contact.name from the list
+    return contact ? contact.name : "Unknown Contact";
   };
 
   const sortedChatContacts = useMemo(() => {
@@ -144,9 +144,9 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
 
       {/* Main Chat Content Area - Shown when a chat is active */}
       {activeChatTargetId && (
-          <main className="flex-grow flex w-full sm:w-auto flex-col overflow-hidden relative">
-            {/* Chat Header and Sub-header container */}
-            <div className="flex-shrink-0"> {/* This div ensures headers don't grow/shrink */}
+          <main className="flex-grow flex w-full sm:w-auto flex-col overflow-y-auto custom-scrollbar relative bg-gray-900"> {/* Added overflow-y-auto and custom-scrollbar, removed overflow-hidden */}
+            {/* Chat Header and Sub-header container - now sticky */}
+            <div className="sticky top-0 z-20 flex-shrink-0"> {/* Added sticky, top-0, z-20 */}
               <div 
                 className="p-4 text-xl font-semibold text-teal-400 bg-gray-800 flex items-center justify-center relative border-b border-gray-700"
               >
@@ -169,10 +169,11 @@ const EscapeRoomChat: React.FC<EscapeRoomChatProps> = ({
             {/* Messages and Input Area */}
             {(isApiKeyAvailable || messages.length > 0 || activeChatTargetId !== 'lily') ? (
               <>
-                {/* MessageList will take remaining space and scroll */}
+                {/* MessageList will just render messages; its parent <main> scrolls */}
                 <MessageList messages={messages} messagesEndRef={messagesEndRef} />
-                {/* UserInput is absolutely positioned at the bottom of this main container */}
-                <div className="absolute bottom-0 left-0 right-0 w-full z-10">
+                
+                {/* UserInput is sticky positioned at the bottom of this main container */}
+                <div className="sticky bottom-0 left-0 right-0 w-full z-20"> {/* Changed from absolute to sticky, increased z-index */}
                   <UserInput 
                     onSendMessage={onSendMessage} 
                     isLoading={isLilyTyping && activeChatTargetId === 'lily'} 
