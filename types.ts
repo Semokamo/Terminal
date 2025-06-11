@@ -45,7 +45,7 @@ export type View =
   | 'credits'; // Added new credits view
 
 // Represents a file or item in the Files app
-export interface GalleryItem { 
+export interface FileItem { // Renamed from GalleryItem
   id: string;
   title: string;
   // Type for icon allowing className to be passed via React.cloneElement
@@ -57,3 +57,5 @@ export interface GalleryItem {
   imageUrl?: string;      // For URL of an image if type is 'photo'
   isLoadingImage?: boolean; // To indicate if the image for this item is currently loading
 }
+
+export type BrowserContentView = 'page' | 'history' | 'bookmarks';
