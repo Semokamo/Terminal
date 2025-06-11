@@ -1205,7 +1205,7 @@ const App: React.FC = () => {
     currentView !== 'credits';
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-black">
+    <div className="h-full w-full flex flex-col bg-black">
       {isSigningOut && <SigningOutScreen />}
 
       {!isSigningOut && (
