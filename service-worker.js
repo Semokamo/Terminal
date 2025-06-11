@@ -7,15 +7,15 @@ const URLS_TO_CACHE = [
   // App assets
   'https://wallpapers.com/images/hd/hacking-background-bryw246r4lx5pyue.jpg',
   // Icons (ensure these paths match what you create and what's in manifest.json)
-  '/assets/icons/icon-72x72.png',
-  '/assets/icons/icon-96x96.png',
-  '/assets/icons/icon-128x128.png',
-  '/assets/icons/icon-144x144.png',
-  '/assets/icons/icon-152x152.png',
-  '/assets/icons/icon-192x192.png',
-  '/assets/icons/icon-384x384.png',
-  '/assets/icons/icon-512x512.png',
-  '/assets/icons/apple-touch-icon.png', // For Apple devices
+  '/icons/icon-72x72.png',
+  '/icons/icon-96x96.png',
+  '/icons/icon-128x128.png',
+  '/icons/icon-144x144.png',
+  '/icons/icon-152x152.png',
+  '/icons/icon-192x192.png',
+  '/icons/icon-384x384.png',
+  '/icons/icon-512x512.png',
+  '/icons/apple-touch-icon.png', // For Apple devices
   // CDNs and external resources from importmap and index.html
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@400;700&display=swap',
