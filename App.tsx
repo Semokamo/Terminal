@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, FC } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import AndroidHomeScreen from './components/AndroidHomeScreen';
 import EscapeRoomChat from './components/EscapeRoomChat';
@@ -17,6 +17,7 @@ import SystemInitiatingScreen from './components/SystemInitiatingScreen';
 import CalculatorScreen from './components/CalculatorScreen';
 import MacOSTopBar from '@/components/MacOSTopBar';
 import SignOutConfirmationDialog from './components/SignOutConfirmationDialog';
+import NewGameConfirmationDialog from './components/NewGameConfirmationDialog'; // Added
 import SigningOutScreen from './components/SigningOutScreen';
 import CreditsScreen from './components/CreditsScreen';
 import {
@@ -27,7 +28,7 @@ import {
     SUBJECT_34_PROFILE_NAME
 } from './constants';
 import { Message, Sender, ChatTargetId, ChatContact, View as AppView, ChatTargetIdOrNull, BrowserContentView } from './types';
-import { initChatSession, sendMessageToChat } from './services/geminiService';
+import { initChatSession, sendMessageToChat, serializeChatHistory, deserializeChatHistoryTimestamps, serializeTimestamps, deserializeTimestamps, convertMessagesToGeminiHistory } from './services/geminiService';
 
 type AppStatus = 'uninitialized' | 'initializing_api' | 'api_ready' | 'api_error';
 
@@ -36,6 +37,8 @@ export interface OverviewApp {
   title: string;
   status: string;
 }
+
+const LOCAL_STORAGE_STATE_KEY = 'terminalEchoesGameState_v1';
 
 const initialChatHistoriesState: Record<ChatTargetId, Message[]> = {
   lily: [],
@@ -104,6 +107,7 @@ const App: React.FC = () => {
   const [relocationEta, setRelocationEta] = useState<string>("Calculating...");
 
   const [isSignOutConfirmVisible, setIsSignOutConfirmVisible] = useState<boolean>(false);
+  const [isNewGameConfirmVisible, setIsNewGameConfirmVisible] = useState<boolean>(false); // Added
   const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
 
   const [lastMessageTimestamps, setLastMessageTimestamps] = useState<Record<ChatTargetId, number>>({
@@ -120,10 +124,20 @@ const App: React.FC = () => {
   const [currentNotification, setCurrentNotification] = useState<AppNotification | null>(null);
   const notificationDismissTimerRef = useRef<number | null>(null);
 
+  const [isStateLoaded, setIsStateLoaded] = useState(false);
+  const [hasSavedGame, setHasSavedGame] = useState<boolean>(false);
+
 
   const MIN_TYPING_DELAY = 700;
   const MAX_TYPING_DELAY = 4000;
   const TYPING_DELAY_PER_CHAR = 40;
+
+  useEffect(() => {
+    if (currentView === 'game_start') { 
+      const savedStateString = localStorage.getItem(LOCAL_STORAGE_STATE_KEY);
+      setHasSavedGame(!!savedStateString);
+    }
+  }, [currentView]);
 
   const displayNotification = useCallback((msgText: string, senderName?: string, targetChatId?: ChatTargetId) => {
     const fullMessage = senderName ? `${senderName}: ${msgText}` : msgText;
@@ -214,16 +228,82 @@ const App: React.FC = () => {
     }
   }, [currentView]);
 
+  const resetGameState = useCallback(() => {
+    setAppStatus('uninitialized');
+    setAiInstance(null);
+    setIsApiKeyActuallyAvailable(false);
+    setChatHistories(initialChatHistoriesState);
+    setActiveChatTargetId(null);
+    setLastOpenedChat(null);
+    setIsCurrentChatResponsive(false);
+    setMessengerFirstOpenedThisSession(false);
+    setIsLilyTyping(false);
+    setLilyChatSession(null);
+    setLilyChatInitialized(false);
+    setChatError(null);
+    setIsOverviewVisible(false);
+    setActiveAppsInOverview([]);
+    setBrowserCurrentUrl('');
+    setCalculatorDisplayValue("0");
+    setFilesUnlocked(false);
+    setSkullsSystemUnlocked(false);
+    setRelocationEta("Calculating...");
+    setLastMessageTimestamps({ lily: 0, relocation: 0, subject32: 0, subject33: 0 });
+    setUnreadCounts(initialUnreadCounts);
+    setCurrentNotification(null);
+    setNotificationQueue([]);
+    if (notificationDismissTimerRef.current) {
+      clearTimeout(notificationDismissTimerRef.current);
+      notificationDismissTimerRef.current = null;
+    }
+    setIsLilyTrusting(false);
+    if (lilyIdleTimerRef.current) {
+      clearTimeout(lilyIdleTimerRef.current);
+      lilyIdleTimerRef.current = null;
+    }
+    setBrowserHistory([]);
+    setBrowserBookmarks(['skulls.system']);
+    setBrowserContentView('page');
+    localStorage.removeItem(LOCAL_STORAGE_STATE_KEY);
+    setHasSavedGame(false);
+    setIsStateLoaded(false); 
+  }, []);
+
+  const handleNewGame = useCallback(() => {
+    if (hasSavedGame) {
+      setIsNewGameConfirmVisible(true);
+    } else {
+      resetGameState();
+      proceedToScenarioIntro();
+    }
+  }, [hasSavedGame, resetGameState, proceedToScenarioIntro]);
+  
+  const confirmAndStartNewGame = useCallback(() => {
+    setIsNewGameConfirmVisible(false);
+    resetGameState();
+    proceedToScenarioIntro();
+  }, [resetGameState, proceedToScenarioIntro]);
+
+  const cancelNewGameConfirmation = useCallback(() => {
+    setIsNewGameConfirmVisible(false);
+  }, []);
+  
+  const handleLoadGame = useCallback(() => {
+    setCurrentView('initial_load');
+  }, []);
+
   const initializeApi = useCallback(() => {
     setAppStatus('initializing_api');
-    const key = process.env.API_KEY;
+    const key = process.env.API_KEY; 
     if (key) {
       try {
         const ai = new GoogleGenAI({ apiKey: key });
         setAiInstance(ai);
         setIsApiKeyActuallyAvailable(true);
         setAppStatus('api_ready');
-        setCurrentView('home');
+        if (!isStateLoaded || currentView === 'initial_load') {
+             setCurrentView('home');
+        }
       } catch (error) {
         console.error("Error initializing GoogleGenAI:", error);
         setAppStatus('api_error');
@@ -233,7 +313,7 @@ const App: React.FC = () => {
       setAppStatus('api_error');
       setIsApiKeyActuallyAvailable(false);
     }
-  }, []);
+  }, [isStateLoaded, currentView]);
 
   const initializeAllChats = useCallback(() => {
     const now = new Date();
@@ -261,22 +341,98 @@ const App: React.FC = () => {
     });
 
     setChatHistories(prev => ({
-      ...prev,
+      ...prev, 
+      lily: initialChatHistoriesState.lily, 
       relocation: relocationHistoryWithTimestampsAndSeen,
-      subject32: [],
-      subject33: [],
+      subject32: initialChatHistoriesState.subject32, 
+      subject33: initialChatHistoriesState.subject33, 
     }));
 
     setLastMessageTimestamps(prev => ({...prev, relocation: relocationLastTimestamp || Date.now()}));
     setUnreadCounts(prev => ({ ...prev, relocation: relocationUnreadCount }));
 
-  }, []);
+  }, [activeChatTargetIdRef]); 
 
+  // LOAD GAME STATE
   useEffect(() => {
-    if (appStatus === 'api_ready') {
-      initializeAllChats();
+    if (appStatus === 'api_ready' && aiInstance && !isStateLoaded) {
+      const savedStateString = localStorage.getItem(LOCAL_STORAGE_STATE_KEY);
+      let successfullyLoaded = false;
+
+      if (savedStateString) {
+        try {
+          const loadedState = JSON.parse(savedStateString);
+
+          if (loadedState.currentView && (currentView === 'initial_load' || currentView === 'home')) {
+            setCurrentView(loadedState.currentView);
+          }
+          
+          let loadedLilyHistory: Message[] = [];
+          if (loadedState.chatHistories) {
+            const deserialized = deserializeChatHistoryTimestamps(loadedState.chatHistories);
+            setChatHistories(deserialized); 
+            loadedLilyHistory = deserialized.lily || []; 
+          } else {
+            initializeAllChats(); 
+            loadedLilyHistory = [];
+          }
+          
+          if (loadedState.activeChatTargetId) setActiveChatTargetId(loadedState.activeChatTargetId);
+          if (loadedState.lastOpenedChat) setLastOpenedChat(loadedState.lastOpenedChat);
+          
+          if (loadedState.lilyChatInitialized !== undefined) setLilyChatInitialized(loadedState.lilyChatInitialized);
+
+
+          if (loadedState.isLilyTrusting) setIsLilyTrusting(loadedState.isLilyTrusting);
+          if (loadedState.activeAppsInOverview) setActiveAppsInOverview(loadedState.activeAppsInOverview);
+          if (loadedState.browserCurrentUrl) setBrowserCurrentUrl(loadedState.browserCurrentUrl);
+          if (loadedState.browserHistory) setBrowserHistory(loadedState.browserHistory);
+          if (loadedState.browserBookmarks) setBrowserBookmarks(loadedState.browserBookmarks);
+          if (loadedState.browserContentView) setBrowserContentView(loadedState.browserContentView);
+          if (loadedState.calculatorDisplayValue) setCalculatorDisplayValue(loadedState.calculatorDisplayValue);
+          if (loadedState.filesUnlocked) setFilesUnlocked(loadedState.filesUnlocked);
+          if (loadedState.skullsSystemUnlocked) setSkullsSystemUnlocked(loadedState.skullsSystemUnlocked);
+          if (loadedState.relocationEta) setRelocationEta(loadedState.relocationEta);
+          if (loadedState.lastMessageTimestamps) setLastMessageTimestamps(deserializeTimestamps(loadedState.lastMessageTimestamps));
+          if (loadedState.messengerFirstOpenedThisSession) setMessengerFirstOpenedThisSession(loadedState.messengerFirstOpenedThisSession);
+          if (loadedState.unreadCounts) setUnreadCounts(loadedState.unreadCounts);
+
+          if (aiInstance) { 
+            const shouldReInitLilyChat = loadedState.lilyChatInitialized || loadedLilyHistory.length > 0;
+            
+            if (shouldReInitLilyChat) {
+              try {
+                  const geminiHistory = convertMessagesToGeminiHistory(loadedLilyHistory);
+                  console.log("LOAD_EFFECT: Re-initializing Lily chat with history. Parts:", geminiHistory.length);
+                  const newChat = initChatSession(aiInstance, SYSTEM_INSTRUCTION, geminiHistory);
+                  setLilyChatSession(newChat);
+                  setLilyChatInitialized(true); 
+              } catch (error) {
+                  console.error("Error re-initializing Lily chat session from saved state:", error);
+                  setChatError(`Error restoring ${SUBJECT_34_PROFILE_NAME} session.`);
+                  setLilyChatInitialized(false); 
+              }
+            }
+          }
+          successfullyLoaded = true;
+          console.log("Game state loaded from localStorage.");
+        } catch (error) {
+          console.error("Failed to parse or apply saved game state:", error);
+          localStorage.removeItem(LOCAL_STORAGE_STATE_KEY);
+          setHasSavedGame(false); 
+          initializeAllChats(); 
+        }
+      }
+      if (!successfullyLoaded) { 
+        initializeAllChats(); 
+        if (currentView === 'initial_load') { 
+          setCurrentView('home');
+        }
+      }
+      setIsStateLoaded(true); 
     }
-  }, [appStatus, initializeAllChats]);
+  }, [appStatus, aiInstance, isStateLoaded, initializeAllChats, SYSTEM_INSTRUCTION, SUBJECT_34_PROFILE_NAME, currentView]);
+
 
   const parseGeminiResponse = useCallback((responseText: string): { segments: Array<{ type: 'text'; content: string } | { type: 'image_prompt'; content: string }> } => {
     const finalSegments: Array<{ type: 'text'; content: string } | { type: 'image_prompt'; content: string }> = [];
@@ -410,9 +566,8 @@ const App: React.FC = () => {
 
             if (!initialCall) updateActiveApps('chat', 'Messenger', `${SUBJECT_34_PROFILE_NAME} is sending an image...`);
             try {
-                // Placeholder: Simulating image generation for now
                 const response = await aiInstance.models.generateImages({
-                    model: 'imagen-3.0-generate-002', // Use the correct model
+                    model: 'imagen-3.0-generate-002',
                     prompt: segment.content,
                     config: {numberOfImages: 1, outputMimeType: 'image/jpeg'},
                 });
@@ -444,35 +599,33 @@ const App: React.FC = () => {
         }
     }
     setIsLilyTyping(false);
-  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay, displayNotification, isLilyTrusting, setIsLilyTrusting]);
+  }, [aiInstance, parseGeminiResponse, updateActiveApps, calculateTypingDelay, displayNotification, isLilyTrusting, setIsLilyTrusting, LILY_CHAT_SPEAKER_NAME, SUBJECT_34_PROFILE_NAME, activeChatTargetIdRef]);
 
   const initializeLilyChat = useCallback(async () => {
-    if (!aiInstance || lilyChatInitialized) {
-      if (!aiInstance) {
-        setChatError("AI Service not initialized.");
-        const currentActiveChat = activeChatTargetIdRef.current;
-        const errorMsgIsSeen = currentActiveChat === 'lily';
-        const errorMsgText = "Error: AI Service not initialized.";
-        const errorMsg: Message = { id: 'ai-init-error', sender: Sender.System, text: errorMsgText, timestamp: new Date(), isError: true, isSeen: errorMsgIsSeen };
-        setChatHistories(prev => ({...prev, lily: [errorMsg]}));
-        if (!errorMsgIsSeen) {
-          setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
-          displayNotification(errorMsgText, undefined, 'lily');
-        }
+    if (!aiInstance) {
+      setChatError("AI Service not initialized.");
+      const errorMsg: Message = { id: `init-error-no-ai-${Date.now()}`, sender: Sender.System, text: "AI Service not initialized.", timestamp: new Date(), isError: true, isSeen: activeChatTargetIdRef.current === 'lily' };
+      setChatHistories(prev => ({...prev, lily: [...prev.lily, errorMsg]}));
+      if(activeChatTargetIdRef.current !== 'lily') {
+        setUnreadCounts(prev => ({ ...prev, lily: (prev.lily || 0) + 1 }));
+        displayNotification("AI Service not initialized.", undefined, 'lily');
       }
+      updateActiveApps('chat', 'Messenger', 'Error: AI Offline');
+      setLilyChatInitialized(false);
       return;
     }
-
-    setLilyChatInitialized(true);
-    setChatHistories(prev => ({...prev, lily: [] }));
-    setLastMessageTimestamps(prev => ({ ...prev, lily: 0}));
+    
     setChatError(null);
-    setIsLilyTyping(false);
-    updateActiveApps('chat', 'Messenger', `Chat with ${LILY_CHAT_SPEAKER_NAME}`);
+    updateActiveApps('chat', 'Messenger', `Chat with ${SUBJECT_34_PROFILE_NAME}`);
 
     try {
-      const newChat = initChatSession(aiInstance, SYSTEM_INSTRUCTION);
+      const currentLilyMessages = chatHistories.lily || [];
+      const geminiHistory = convertMessagesToGeminiHistory(currentLilyMessages);
+      console.log("initializeLilyChat: Initializing/Re-initializing with history. Parts:", geminiHistory.length);
+      
+      const newChat = initChatSession(aiInstance, SYSTEM_INSTRUCTION, geminiHistory);
       setLilyChatSession(newChat);
+      setLilyChatInitialized(true); 
     } catch (error) {
       console.error("Error initializing Lily chat session:", error);
       const errorText = `Error starting ${SUBJECT_34_PROFILE_NAME} session: ${error instanceof Error ? error.message : String(error)}`;
@@ -488,7 +641,7 @@ const App: React.FC = () => {
       setLilyChatInitialized(false);
       updateActiveApps('chat', 'Messenger', 'Error starting chat');
     }
-  }, [aiInstance, lilyChatInitialized, updateActiveApps, displayNotification]);
+  }, [aiInstance, chatHistories, updateActiveApps, displayNotification, SYSTEM_INSTRUCTION, SUBJECT_34_PROFILE_NAME, activeChatTargetIdRef]);
 
   const handleSwitchChatTarget = useCallback(async (targetId: ChatTargetIdOrNull) => {
     setActiveChatTargetId(targetId);
@@ -503,8 +656,10 @@ const App: React.FC = () => {
     const contact = CHAT_CONTACT_LIST.find(c => c.id === targetId);
     setIsCurrentChatResponsive(contact ? contact.isResponsive : false);
 
-    if (targetId === 'lily' && appStatus === 'api_ready' && !lilyChatInitialized && aiInstance) {
-      await initializeLilyChat();
+    if (targetId === 'lily' && appStatus === 'api_ready' && aiInstance) {
+      if (!lilyChatSession || !lilyChatInitialized) { 
+          await initializeLilyChat();
+      }
     }
 
     setChatHistories(prevHistories => {
@@ -524,7 +679,7 @@ const App: React.FC = () => {
       : NO_CHAT_SELECTED_DISPLAY_NAME;
     updateActiveApps('chat', 'Messenger', status);
 
-  }, [appStatus, aiInstance, lilyChatInitialized, initializeLilyChat, updateActiveApps]);
+  }, [appStatus, aiInstance, initializeLilyChat, updateActiveApps, lilyChatSession, lilyChatInitialized, SUBJECT_34_PROFILE_NAME]);
 
   const navigateToChat = useCallback((targetId?: ChatTargetIdOrNull) => {
     if (appStatus !== 'api_ready') {
@@ -537,12 +692,12 @@ const App: React.FC = () => {
     if (!messengerFirstOpenedThisSession) {
       setCurrentView('chat');
       setMessengerFirstOpenedThisSession(true);
-      handleSwitchChatTarget(null); 
+      handleSwitchChatTarget(null);
     } else {
       setCurrentView('chat');
-      if (targetId !== undefined) { 
+      if (targetId !== undefined) {
           handleSwitchChatTarget(targetId);
-      } else { 
+      } else {
           handleSwitchChatTarget(lastOpenedChat || null);
       }
     }
@@ -550,10 +705,13 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    if (currentView === 'chat' && activeChatTargetId === 'lily' && appStatus === 'api_ready' && !lilyChatInitialized && aiInstance) {
-      initializeLilyChat();
+    if (currentView === 'chat' && activeChatTargetId === 'lily' && appStatus === 'api_ready' && aiInstance) {
+      if (!lilyChatSession || !lilyChatInitialized) { 
+         console.log("VIEW_EFFECT: Calling initializeLilyChat. Session exists?", !!lilyChatSession, "Initialized?", lilyChatInitialized);
+         initializeLilyChat();
+      }
     }
-  }, [currentView, activeChatTargetId, appStatus, lilyChatInitialized, aiInstance, initializeLilyChat]);
+  }, [currentView, activeChatTargetId, appStatus, aiInstance, initializeLilyChat, lilyChatSession, lilyChatInitialized]);
 
   const navigateToHome = useCallback(() => {
     if (isOverviewVisible) setIsOverviewVisible(false);
@@ -603,7 +761,7 @@ const App: React.FC = () => {
         return 'Idle';
     }
   }, [browserContentView, browserCurrentUrl, skullsSystemUnlocked]);
-  
+
   const navigateToBrowser = useCallback(() => {
     setCurrentView('browser');
     updateActiveApps('browser', 'Web Browser', getBrowserAppStatus());
@@ -624,7 +782,7 @@ const App: React.FC = () => {
       updateActiveApps('browser', 'Web Browser', 'skulls.system - Unlocked');
       return true;
     }
-    setSkullsSystemUnlocked(false);
+    setSkullsSystemUnlocked(false); 
     updateActiveApps('browser', 'Web Browser', 'skulls.system - Locked');
     return false;
   };
@@ -632,7 +790,7 @@ const App: React.FC = () => {
   const handleBrowserNavigationRequest = (url: string) => {
     const trimmedUrl = url.trim();
     setBrowserCurrentUrl(trimmedUrl);
-    setBrowserContentView('page'); // Always switch to page view on new navigation
+    setBrowserContentView('page'); 
 
     if (trimmedUrl && trimmedUrl.toLowerCase() !== 'skulls.system') {
         setBrowserHistory(prev => {
@@ -648,7 +806,7 @@ const App: React.FC = () => {
 
     setBrowserBookmarks(prevBookmarks => {
         if (prevBookmarks.includes(urlToAdd)) {
-            return prevBookmarks; 
+            return prevBookmarks;
         }
         const otherBookmarks = prevBookmarks.filter(bm => bm.toLowerCase() !== 'skulls.system');
         const updatedOtherBookmarks = [...otherBookmarks, urlToAdd].sort();
@@ -657,7 +815,7 @@ const App: React.FC = () => {
   }, []);
 
   const removeBrowserBookmark = useCallback((urlToRemove: string) => {
-      if (!urlToRemove || urlToRemove.toLowerCase() === 'skulls.system') return; 
+      if (!urlToRemove || urlToRemove.toLowerCase() === 'skulls.system') return;
 
       setBrowserBookmarks(prevBookmarks => prevBookmarks.filter(bm => bm !== urlToRemove));
   }, []);
@@ -665,12 +823,10 @@ const App: React.FC = () => {
   const isUrlBookmarked = useCallback((url: string) => {
       return browserBookmarks.includes(url);
   }, [browserBookmarks]);
-  
+
   const handleToggleBookmark = useCallback((url: string) => {
     if (!url) return;
     if (url.toLowerCase() === 'skulls.system') {
-      // skulls.system is always bookmarked and cannot be toggled by user.
-      // Optionally display a message or simply do nothing.
       return;
     }
 
@@ -698,10 +854,10 @@ const App: React.FC = () => {
     const isMobileScreen = window.innerWidth < 640;
 
     if (currentView === 'chat' && isMobileScreen && activeChatTargetId !== null) {
-      handleSwitchChatTarget(null); 
+      handleSwitchChatTarget(null);
     } else if (currentView === 'browser' && browserContentView !== 'page') {
-        setBrowserContentView('page'); // If in history/bookmarks, back goes to main page view
-    } else if (currentView !== 'home') {
+        setBrowserContentView('page'); 
+    } else if (currentView !== 'home' && currentView !== 'initial_load' && currentView !== 'system_initiating' && currentView !== 'intro' && currentView !== 'game_start') { // Prevent going "back" from home to init screens
       navigateToHome();
     }
   };
@@ -806,13 +962,12 @@ const App: React.FC = () => {
       setBrowserCurrentUrl('');
       setSkullsSystemUnlocked(false);
       setBrowserHistory([]);
-      // Do NOT reset browserBookmarks here; they persist for the game session
       setBrowserContentView('page');
     } else if (viewId === 'calculator') {
       setCalculatorDisplayValue("0");
     } else if (viewId === 'chat') {
       setMessengerFirstOpenedThisSession(false);
-      setLastOpenedChat(null); 
+      setLastOpenedChat(null);
       if (currentView === 'chat') {
          setActiveChatTargetId(null);
       }
@@ -823,45 +978,8 @@ const App: React.FC = () => {
     if (currentView === viewId) {
       setCurrentView('home');
     }
-  }, [currentView]); 
+  }, [currentView]);
 
-  const resetGameState = useCallback(() => {
-    setAppStatus('uninitialized');
-    setAiInstance(null);
-    setIsApiKeyActuallyAvailable(false);
-    setChatHistories(initialChatHistoriesState);
-    setActiveChatTargetId(null);
-    setLastOpenedChat(null);
-    setIsCurrentChatResponsive(false);
-    setMessengerFirstOpenedThisSession(false);
-    setIsLilyTyping(false);
-    setLilyChatSession(null);
-    setLilyChatInitialized(false);
-    setChatError(null);
-    setIsOverviewVisible(false);
-    setActiveAppsInOverview([]);
-    setBrowserCurrentUrl('');
-    setCalculatorDisplayValue("0");
-    setFilesUnlocked(false);
-    setSkullsSystemUnlocked(false);
-    setRelocationEta("Calculating...");
-    setLastMessageTimestamps({ lily: 0, relocation: 0, subject32: 0, subject33: 0 });
-    setUnreadCounts(initialUnreadCounts);
-    setCurrentNotification(null);
-    setNotificationQueue([]);
-    if (notificationDismissTimerRef.current) {
-      clearTimeout(notificationDismissTimerRef.current);
-      notificationDismissTimerRef.current = null;
-    }
-    setIsLilyTrusting(false);
-    if (lilyIdleTimerRef.current) {
-      clearTimeout(lilyIdleTimerRef.current);
-      lilyIdleTimerRef.current = null;
-    }
-    setBrowserHistory([]);
-    setBrowserBookmarks(['skulls.system']);
-    setBrowserContentView('page');
-  }, []);
 
   const requestSignOut = () => {
     setIsSignOutConfirmVisible(true);
@@ -872,7 +990,7 @@ const App: React.FC = () => {
     setIsSigningOut(true);
 
     setTimeout(() => {
-      resetGameState();
+      resetGameState(); 
       setIsSigningOut(false);
       setCurrentView('credits');
     }, 1800);
@@ -887,7 +1005,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleNotificationClick = useCallback(() => {
-    const targetChat = currentNotification?.chatTargetId || null; 
+    const targetChat = currentNotification?.chatTargetId || null;
     navigateToChat(targetChat);
 
     if (notificationDismissTimerRef.current) {
@@ -921,7 +1039,7 @@ const App: React.FC = () => {
       setUnreadCounts(prevUnread => ({ ...prevUnread, lily: (prevUnread.lily || 0) + 1 }));
       displayNotification(randomMessageText, SUBJECT_34_PROFILE_NAME, 'lily');
     }
-  }, [displayNotification, activeChatTargetIdRef]);
+  }, [displayNotification, activeChatTargetIdRef, SUBJECT_34_PROFILE_NAME]);
 
   useEffect(() => {
     if (lilyIdleTimerRef.current) {
@@ -943,7 +1061,7 @@ const App: React.FC = () => {
         const idealNextCheckInTime = lastInteractionTime + (Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay);
         timeToWait = idealNextCheckInTime - now;
       } else {
-        timeToWait = -1;
+        timeToWait = -1; 
       }
 
       if (timeToWait > 0) {
@@ -969,10 +1087,48 @@ const App: React.FC = () => {
     sendLilyIdleCheckInMessage,
   ]);
 
+  // SAVE GAME STATE
+  useEffect(() => {
+    if (appStatus === 'api_ready' && isStateLoaded) {
+      const gameState = {
+        currentView,
+        chatHistories: serializeChatHistory(chatHistories),
+        activeChatTargetId,
+        lastOpenedChat,
+        lilyChatInitialized,
+        isLilyTrusting,
+        activeAppsInOverview,
+        browserCurrentUrl,
+        browserHistory,
+        browserBookmarks,
+        browserContentView,
+        calculatorDisplayValue,
+        filesUnlocked,
+        skullsSystemUnlocked,
+        relocationEta,
+        lastMessageTimestamps: serializeTimestamps(lastMessageTimestamps),
+        messengerFirstOpenedThisSession,
+        unreadCounts,
+      };
+      try {
+        const serialized = JSON.stringify(gameState);
+        localStorage.setItem(LOCAL_STORAGE_STATE_KEY, serialized);
+        setHasSavedGame(true); 
+      } catch (error) {
+        console.error("Failed to save game state:", error);
+      }
+    }
+  }, [
+    currentView, chatHistories, activeChatTargetId, lastOpenedChat, lilyChatInitialized,
+    isLilyTrusting, activeAppsInOverview, browserCurrentUrl, browserHistory, browserBookmarks,
+    browserContentView, calculatorDisplayValue, filesUnlocked, skullsSystemUnlocked, relocationEta,
+    lastMessageTimestamps, messengerFirstOpenedThisSession, unreadCounts, appStatus, isStateLoaded
+  ]);
+
 
   const renderContent = () => {
     switch (currentView) {
-      case 'game_start': return <GameStartScreen onStartGame={proceedToScenarioIntro} />;
+      case 'game_start': return <GameStartScreen onNewGame={handleNewGame} onLoadGame={handleLoadGame} hasSavedGame={hasSavedGame} />;
       case 'intro': return <IntroScreen onProceed={proceedToSystemInitiating} />;
       case 'system_initiating': return <SystemInitiatingScreen />;
       case 'initial_load': return <InitialLoadingScreen onStartExperience={initializeApi} status={appStatus} />;
@@ -1021,7 +1177,7 @@ const App: React.FC = () => {
                   initialDisplayValue={calculatorDisplayValue}
                   onDisplayChange={setCalculatorDisplayValue}
                 />;
-      default: return <GameStartScreen onStartGame={proceedToScenarioIntro} />;
+      default: return <GameStartScreen onNewGame={handleNewGame} onLoadGame={handleLoadGame} hasSavedGame={hasSavedGame} />;
     }
   };
 
@@ -1094,6 +1250,13 @@ const App: React.FC = () => {
               isOpen={isSignOutConfirmVisible}
               onConfirm={confirmAndProceedSignOut}
               onCancel={cancelSignOut}
+            />
+          )}
+          {isNewGameConfirmVisible && ( // Added
+            <NewGameConfirmationDialog
+              isOpen={isNewGameConfirmVisible}
+              onConfirm={confirmAndStartNewGame}
+              onCancel={cancelNewGameConfirmation}
             />
           )}
         </>
