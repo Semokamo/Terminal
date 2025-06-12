@@ -42,20 +42,37 @@ export type View =
   | 'files_unlocked'    
   | 'browser' 
   | 'calculator'
-  | 'credits'; // Added new credits view
+  | 'email' // Added Email app view
+  | 'credits'; 
 
 // Represents a file or item in the Files app
-export interface FileItem { // Renamed from GalleryItem
+export interface FileItem { 
   id: string;
   title: string;
-  // Type for icon allowing className to be passed via React.cloneElement
   icon: React.ReactElement<{ className?: string }>; 
   description: string;
   listItems?: string[];
-  type: 'note' | 'photo'; // Type of the file item
-  content?: string;       // For text content of a note, if different from description
-  imageUrl?: string;      // For URL of an image if type is 'photo'
-  isLoadingImage?: boolean; // To indicate if the image for this item is currently loading
+  type: 'note' | 'photo'; 
+  content?: string;       
+  imageUrl?: string;      
+  isLoadingImage?: boolean; 
 }
 
 export type BrowserContentView = 'page' | 'history' | 'bookmarks';
+
+// Email App Types
+export type EmailFolder = 'inbox' | 'sent' | 'drafts' | 'trash';
+
+export interface Email {
+  id: string;
+  from: string; // email address or name
+  to: string[]; // array of email addresses or names
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string;
+  timestamp: Date;
+  isRead: boolean;
+  folder: EmailFolder;
+  attachments?: any[]; // Simplified for now
+}
