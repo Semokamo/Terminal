@@ -6,10 +6,11 @@ interface NavigationControlsProps {
   onBackClick: () => void;
   onOverviewClick: () => void;
   isChatActive: boolean;
-  isFilesLockedActive: boolean;    // Renamed from isGalleryActive
-  isFilesUnlockedActive: boolean; // Renamed from isGalleryUnlockedActive
+  isFilesLockedActive: boolean;    
+  isFilesUnlockedActive: boolean; 
   isBrowserActive: boolean;
   isCalculatorActive: boolean; 
+  isEmailActive: boolean; // Added for Email app
   isOverviewVisible: boolean;
 }
 
@@ -37,13 +38,14 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
     onBackClick, 
     onOverviewClick,
     isChatActive, 
-    isFilesLockedActive,    // Renamed
-    isFilesUnlockedActive, // Renamed
+    isFilesLockedActive,    
+    isFilesUnlockedActive, 
     isBrowserActive,
     isCalculatorActive, 
+    isEmailActive, // Added
     isOverviewVisible
 }) => {
-  const canGoBack = isChatActive || isFilesLockedActive || isFilesUnlockedActive || isBrowserActive || isCalculatorActive || isOverviewVisible;
+  const canGoBack = isChatActive || isFilesLockedActive || isFilesUnlockedActive || isBrowserActive || isCalculatorActive || isEmailActive || isOverviewVisible;
 
   const baseButtonClasses = "p-3 rounded-full text-gray-300 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-teal-500";
   const interactiveButtonClasses = "hover:bg-gray-700 hover:text-white active:bg-gray-600";
@@ -71,8 +73,8 @@ const NavigationControls: React.FC<NavigationControlsProps> = ({
           aria-label="Overview of open applications"
           className={`${baseButtonClasses} ${
             isOverviewVisible
-              ? 'text-teal-400 bg-gray-700' // "ON" state for overview mode
-              : interactiveButtonClasses    // Standard interactive classes when overview is "OFF"
+              ? 'text-teal-400 bg-gray-700' 
+              : interactiveButtonClasses    
           }`}
         >
             <OverviewIcon className="w-6 h-6" /> 
