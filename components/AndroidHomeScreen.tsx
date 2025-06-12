@@ -1,6 +1,7 @@
 
 import React from 'react';
 import AppIcon from './AppIcon';
+import EmailIcon from './EmailIcon'; // Import the new EmailIcon
 
 interface IconProps {
   className?: string;
@@ -37,6 +38,7 @@ interface AndroidHomeScreenProps {
   onOpenFiles: () => void; 
   onOpenBrowser: () => void;
   onOpenCalculator: () => void;
+  onOpenEmail: () => void; // Added for Email app
 }
 
 const AndroidHomeScreen: React.FC<AndroidHomeScreenProps> = ({ 
@@ -44,12 +46,13 @@ const AndroidHomeScreen: React.FC<AndroidHomeScreenProps> = ({
     onOpenMessenger, 
     onOpenFiles, 
     onOpenBrowser,
-    onOpenCalculator
+    onOpenCalculator,
+    onOpenEmail // Added
 }) => {
 
   const handleOpenMessenger = () => {
     if (isApiKeyAvailable) {
-      onOpenMessenger(); // App.tsx will now handle logic for no target or default
+      onOpenMessenger(); 
     }
   };
   
@@ -63,6 +66,10 @@ const AndroidHomeScreen: React.FC<AndroidHomeScreenProps> = ({
   
   const handleOpenCalculator = () => {
     onOpenCalculator();
+  };
+
+  const handleOpenEmail = () => { // Added
+    onOpenEmail();
   };
 
   return (
@@ -110,6 +117,12 @@ const AndroidHomeScreen: React.FC<AndroidHomeScreenProps> = ({
           onClick={handleOpenCalculator}
           disabled={false} 
         />
+         <AppIcon // Added Email App Icon
+          icon={<EmailIcon />} 
+          label="Mail"       
+          onClick={handleOpenEmail} 
+          disabled={false} 
+        />
       </div>
 
       {!isApiKeyAvailable && (
@@ -117,7 +130,6 @@ const AndroidHomeScreen: React.FC<AndroidHomeScreenProps> = ({
           Configuration Error. Messenger features may be impaired.
         </p>
       )}
-       {/* Footer removed */}
     </div>
   );
 };
