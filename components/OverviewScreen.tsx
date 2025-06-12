@@ -27,6 +27,19 @@ const CalculatorIcon: React.FC<{ className?: string }> = ({ className = "w-10 h-
   </svg>
 );
 
+const EmailAppIcon: React.FC<{ className?: string }> = ({ className = "w-10 h-10" }) => ( // New Email Icon for Overview
+  <svg 
+    className={className} 
+    viewBox="0 0 24 24" 
+    fill="currentColor" 
+    xmlns="http://www.w3.org/2000/svg" 
+    aria-hidden="true"
+  >
+    <path fillRule="evenodd" clipRule="evenodd" d="M20 4H4C2.89543 4 2 4.89543 2 6V18C2 19.1046 2.89543 20 4 20H20C21.1046 20 22 19.1046 22 18V6C22 4.89543 21.1046 4 20 4ZM20 6L12 11L4 6H20ZM4 18V8.23607L11.3396 12.3551C11.7205 12.5655 12.2795 12.5655 12.6604 12.3551L20 8.23607V18H4Z" />
+  </svg>
+);
+
+
 interface OverviewScreenProps {
   apps: OverviewApp[];
   onSwitchApp: (view: View) => void;
@@ -82,7 +95,7 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
       if (cardRef.current) {
          cardRef.current.style.transform = 'translateY(0) scale(1)';
       }
-      if (Math.abs(dy) < 10) { // If it was more of a tap than a drag
+      if (Math.abs(dy) < 10) { 
          onSwitchApp(app.id);
       }
     }
@@ -140,6 +153,8 @@ const AppCard: React.FC<{ app: OverviewApp; onSwitchApp: (view: View) => void; o
     icon = <BrowserIcon className={iconSize} />;
   } else if (app.id === 'calculator') {
     icon = <CalculatorIcon className={iconSize} />;
+  } else if (app.id === 'email') { // Added Email Icon
+    icon = <EmailAppIcon className={iconSize} />;
   }
 
 
@@ -193,11 +208,10 @@ const OverviewScreen: React.FC<OverviewScreenProps> = ({ apps, onSwitchApp, onCl
         className="w-full h-full flex flex-col items-center justify-center"
         onClick={(e) => {
           if (apps.length > 0) {
-            e.stopPropagation(); // Prevent click on content area (but not cards themselves) from closing overview
+            e.stopPropagation(); 
           } else {
-            // If no apps, clicking the "empty content area" (where "No recent apps" msg is) should close
             onClose();
-            e.stopPropagation(); // Good practice to still stop after handling
+            e.stopPropagation(); 
           }
         }}
       >
